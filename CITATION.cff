@@ -3,10 +3,10 @@ message: "If you use CADAQUES in your research, please cite it as below."
 title: "CADAQUES: Cost-Aware Dual Architecture for QUery-Efficient diScovery"
 type: software
 authors:
-  - family-names: "Bravo-Abad"
+  - family-names: "Bravo Abad"
     given-names: "Jorge"
     affiliation: "Universidad Autónoma de Madrid, IFIMAC"
-    orcid: "https://orcid.org/0000-0000-0000-0000"
+    orcid: "https://orcid.org/0000-0001-6876-8022"
 version: 0.1.0.dev0
 date-released: 2026-07-09
 license: MIT
