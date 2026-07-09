@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use CADAQUES in your research, please cite it as below."
+title: "CADAQUES: Cost-Aware Dual Architecture for QUery-Efficient diScovery"
+type: software
+authors:
+  - family-names: "Bravo-Abad"
+    given-names: "Jorge"
+    affiliation: "Universidad Autónoma de Madrid, IFIMAC"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+version: 0.1.0.dev0
+date-released: 2026-07-09
+license: MIT
+repository-code: "https://github.com/jorgebravoabad/cadaques"
+abstract: >-
+  An open-source framework for autonomous discovery campaigns in which
+  every oracle query and driver decision is priced against a single
+  budget: any simulator or instrument behind a metered Oracle protocol,
+  any search strategy behind a Driver protocol.

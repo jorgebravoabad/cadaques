@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cadaques"
+version = "0.1.0.dev0"
+description = "Cost-Aware Dual Architecture for QUery-Efficient diScovery: autonomous discovery campaigns — any oracle, any driver, one budget."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Jorge Bravo-Abad", email = "jorge.bravo@uam.es" }]
+keywords = ["autonomous-discovery", "self-driving-labs", "bayesian-optimization", "active-learning", "cost-aware", "materials-science"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov", "mypy", "ruff"]
+
+[project.urls]
+Repository = "https://github.com/jorgebravoabad/cadaques"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cadaques"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
