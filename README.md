@@ -1,6 +1,7 @@
 # CADAQUES
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21293589.svg)](https://doi.org/10.5281/zenodo.21293589)
+[![PyPI](https://img.shields.io/pypi/v/cadaques.svg)](https://pypi.org/project/cadaques/)
 
 **Cost-Aware Dual Architecture for QUery-Efficient diScovery**
 
@@ -20,18 +21,16 @@ per unit cost. *Every query counts.*
 ## Installation
 
 ```bash
-pip install git+https://github.com/jorgebravoabad/cadaques.git
+pip install cadaques
 ```
 
-Or, for development:
+Or, for development, install the latest version from source:
 
 ```bash
 git clone https://github.com/jorgebravoabad/cadaques.git
 cd cadaques
 pip install -e .
 ```
-
-A PyPI release is planned; see the roadmap below.
 
 ## Quickstart: a discovery campaign with an exact answer
 
@@ -80,10 +79,12 @@ print(f"Spent: {outcome.budget.spent}")
 
 `0.1.0` — core protocols, campaign runner, multi-currency budget and ledger,
 reference drivers, and a canonical Ising-2D oracle with fidelity-dependent cost.
+Available on [PyPI](https://pypi.org/project/cadaques/) and archived on
+[Zenodo](https://doi.org/10.5281/zenodo.21293589).
 
 This is an early release: the API may evolve until `1.0`. Planned next steps
 include a Bayesian-optimization driver, campaign replay, expanded documentation,
-a PyPI release, and an LLM-agent driver adapter.
+and an LLM-agent driver adapter.
 
 ## Citation
 
