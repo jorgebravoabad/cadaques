@@ -18,8 +18,18 @@ per unit cost. *Every query counts.*
 ## Installation
 
 ```bash
-pip install cadaques
+pip install git+https://github.com/jorgebravoabad/cadaques.git
 ```
+
+Or, for development:
+
+```bash
+git clone https://github.com/jorgebravoabad/cadaques.git
+cd cadaques
+pip install -e .
+```
+
+A PyPI release is planned; see the roadmap below.
 
 ## Quickstart: a discovery campaign with an exact answer
 
@@ -64,12 +74,20 @@ print(f"Spent: {outcome.budget.spent}")
 - **The ledger is the provenance.** Every transaction (declared, settled,
   timestamped) exports to JSONL: a complete, replayable trace of the campaign.
 
-## Status
+## Status and roadmap
 
-`0.1.0.dev0` — core protocols, campaign runner, multi-currency budget and ledger,
+`0.1.0` — core protocols, campaign runner, multi-currency budget and ledger,
 reference drivers, and a canonical Ising-2D oracle with fidelity-dependent cost.
-API may evolve until `0.1.0`.
+
+This is an early release: the API may evolve until `1.0`. Planned next steps
+include a Bayesian-optimization driver, campaign replay, expanded documentation,
+a PyPI release, and an LLM-agent driver adapter.
+
+## Citation
+
+If you use CADAQUES in academic work, please cite it (see `CITATION.cff`).
+A Zenodo DOI badge will appear here upon release.
 
 ## License
 
-MIT. If you use CADAQUES in academic work, please cite it (see `CITATION.cff`).
+MIT.

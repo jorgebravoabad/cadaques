@@ -7,8 +7,8 @@ authors:
     given-names: "Jorge"
     affiliation: "Universidad Autónoma de Madrid, IFIMAC"
     orcid: "https://orcid.org/0000-0001-6876-8022"
-version: 0.1.0.dev0
-date-released: 2026-07-09
+version: 0.1.0
+date-released: 2026-07-10
 license: MIT
 repository-code: "https://github.com/jorgebravoabad/cadaques"
 abstract: >-

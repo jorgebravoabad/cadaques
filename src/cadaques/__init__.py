@@ -9,7 +9,7 @@ from .core.cost import Budget, BudgetExceeded, BudgetView, Cost
 from .core.ledger import Ledger, Transaction
 from .core.protocols import Driver, Oracle, Query, Result
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 __all__ = [
     "Budget", "BudgetExceeded", "BudgetView", "Campaign", "CampaignResult",

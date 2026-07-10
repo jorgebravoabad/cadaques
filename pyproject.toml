@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cadaques"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Cost-Aware Dual Architecture for QUery-Efficient diScovery: autonomous discovery campaigns — any oracle, any driver, one budget."
 readme = "README.md"
 requires-python = ">=3.10"
