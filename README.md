@@ -1,5 +1,7 @@
 # CADAQUES
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21293589.svg)](https://doi.org/10.5281/zenodo.21293589)
+
 **Cost-Aware Dual Architecture for QUery-Efficient diScovery**
 
 *An open-source framework for autonomous discovery campaigns: any oracle, any driver, one budget.*
@@ -86,7 +88,7 @@ a PyPI release, and an LLM-agent driver adapter.
 ## Citation
 
 If you use CADAQUES in academic work, please cite it (see `CITATION.cff`).
-A Zenodo DOI badge will appear here upon release.
+DOI: [10.5281/zenodo.21293589](https://doi.org/10.5281/zenodo.21293589)
 
 ## License
 

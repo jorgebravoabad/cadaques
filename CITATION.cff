@@ -1,5 +1,6 @@
 cff-version: 1.2.0
 message: "If you use CADAQUES in your research, please cite it as below."
+doi: 10.5281/zenodo.21293589
 title: "CADAQUES: Cost-Aware Dual Architecture for QUery-Efficient diScovery"
 type: software
 authors:
