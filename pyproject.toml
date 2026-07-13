@@ -22,6 +22,7 @@ dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-cov", "mypy", "ruff"]
+docs = ["sphinx>=8", "furo"]
 
 [project.urls]
 Repository = "https://github.com/jorgebravoabad/cadaques"

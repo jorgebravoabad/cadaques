@@ -7,3 +7,4 @@ campaign_*.jsonl
 .coverage
 .venv/
 docs/_build/
+docs/_build/
