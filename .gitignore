@@ -5,3 +5,5 @@ dist/
 build/
 campaign_*.jsonl
 .coverage
+.venv/
+docs/_build/
