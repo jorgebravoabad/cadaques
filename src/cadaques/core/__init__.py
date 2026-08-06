@@ -12,6 +12,7 @@ from .cost import Budget, BudgetExceeded, BudgetView, Cost
 from .ledger import Ledger, Transaction
 from .observation import Action, FailureRecord, Observation, ObservationStatus
 from .records import Query, Result
+from .spec import CampaignSpec, SpecError
 from .task import Bounds, Constraint, Direction, InvalidQuery, SearchSpace, Task
 
 _MOVED = {

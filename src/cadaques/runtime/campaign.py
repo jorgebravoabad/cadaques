@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Literal, Sequence
+from typing import TYPE_CHECKING, Literal, Sequence
 
 from ..core.cost import Budget, Cost
 from ..core.events import EventLog
@@ -28,6 +28,9 @@ from ..core.records import Query, Result
 from ..core.task import Task
 from ..protocols.driver import Driver
 from ..protocols.oracle import Oracle
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..core.spec import CampaignSpec
 
 StopReason = Literal[
     "budget_exhausted",
@@ -103,6 +106,31 @@ class Campaign:
         self.max_consecutive_rejections = max_consecutive_rejections
         self.events = EventLog()
         self.history: list[Result] = []
+
+    # ------------------------------------------------------------------
+    def to_spec(self, *, max_queries: int | None = None) -> "CampaignSpec":
+        """Declare this campaign as a :class:`CampaignSpec` (ADR-0004/A1).
+
+        Raises :class:`~cadaques.core.spec.SpecError` if a participant
+        is not spec-representable (e.g. holds callables).
+        """
+        from ..core.spec import CampaignSpec, component_spec, task_to_dict
+
+        return CampaignSpec(
+            oracle=component_spec(self.oracle),
+            driver=component_spec(self.driver),
+            budget_total=self.budget.total.as_dict(),
+            task=task_to_dict(self.task) if self.task is not None else None,
+            maximize=self.maximize,
+            meter_driver=self.meter_driver,
+            max_consecutive_rejections=self.max_consecutive_rejections,
+            max_queries=max_queries,
+        )
+
+    @classmethod
+    def from_spec(cls, spec: "CampaignSpec") -> "Campaign":
+        """Reconstruct a fresh campaign from its declaration."""
+        return spec.build()
 
     # ------------------------------------------------------------------
     @property
