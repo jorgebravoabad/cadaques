@@ -165,20 +165,24 @@ class Campaign:
 
     # ------------------------------------------------------------------
     def run(self, max_queries: int | None = None) -> Outcome:
-        self.events.append(
-            "campaign_started",
-            oracle=type(self.oracle).__name__,
-            driver=type(self.driver).__name__,
-            maximize=self.maximize,
-            meter_driver=self.meter_driver,
-            budget_total=self.budget.total.as_dict(),
-            task=self.task.name if self.task is not None else None,
-            seed=self.seed,
-            max_queries=max_queries,
-        )
+        if not self.events.of_kind("campaign_started"):
+            self.events.append(
+                "campaign_started",
+                oracle=type(self.oracle).__name__,
+                driver=type(self.driver).__name__,
+                maximize=self.maximize,
+                meter_driver=self.meter_driver,
+                budget_total=self.budget.total.as_dict(),
+                task=self.task.name if self.task is not None else None,
+                seed=self.seed,
+                max_queries=max_queries,
+            )
 
         stop_reason: StopReason = "budget_exhausted"
         best: Result | None = None
+        for prior in self.history:  # restored history counts (resume, ADR-0004)
+            if prior.ok and (best is None or self._improves(prior, best)):
+                best = prior
         consecutive_rejections = 0
 
         while True:

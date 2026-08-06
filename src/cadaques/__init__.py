@@ -5,6 +5,7 @@ any oracle, any driver, one budget. Every query counts.
 """
 
 from .runtime.campaign import Campaign, CampaignResult, DriverStopped, Outcome
+from .runtime.replay import checkpoint, replay, resume
 from .runtime.state import CampaignState, reduce
 from .core.cost import Budget, BudgetExceeded, BudgetView, Cost
 from .core.ledger import Ledger, Transaction
@@ -23,5 +24,5 @@ __version__ = "0.2.0.dev0"
 __all__ = [
     "Budget", "BudgetExceeded", "BudgetView", "Campaign", "CampaignResult", "CampaignSpec", "SpecError",
     "Cost", "Driver", "Event", "EventLog", "DriverStopped", "Ledger", "Oracle", "OracleResource", "Query", "Resource",
-    "Action", "FailureRecord", "Observation", "ObservationStatus", "Outcome", "CampaignState", "Result", "SearchSpace", "store_artifact", "Task", "InvalidQuery", "Transaction", "__version__",
+    "Action", "FailureRecord", "Observation", "ObservationStatus", "Outcome", "CampaignState", "Result", "SearchSpace", "store_artifact", "checkpoint", "replay", "resume", "Task", "InvalidQuery", "Transaction", "__version__",
 ]
