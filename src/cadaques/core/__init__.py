@@ -8,6 +8,7 @@ are resolved lazily to avoid import cycles (canonical homes:
 
 from .cost import Budget, BudgetExceeded, BudgetView, Cost
 from .ledger import Ledger, Transaction
+from .observation import Action, FailureRecord, Observation, ObservationStatus
 from .records import Query, Result
 from .task import Bounds, Constraint, Direction, InvalidQuery, SearchSpace, Task
 
