@@ -16,6 +16,7 @@ from typing import Literal, Sequence
 from ..core.cost import Budget, Cost
 from ..core.ledger import Ledger
 from ..core.records import Result
+from ..core.task import Task
 from ..protocols.driver import Driver
 from ..protocols.oracle import Oracle
 
@@ -65,13 +66,17 @@ class Campaign:
         driver: Driver,
         budget: Budget,
         *,
-        maximize: bool = True,
+        task: Task | None = None,
+        maximize: bool | None = None,
         meter_driver: bool = True,
     ) -> None:
+        if task is not None and maximize is not None and maximize != task.maximize:
+            raise ValueError("Conflicting 'maximize' and task.direction; pass one.")
         self.oracle = oracle
         self.driver = driver
         self.budget = budget
-        self.maximize = maximize
+        self.task = task
+        self.maximize = task.maximize if task is not None else (True if maximize is None else maximize)
         self.meter_driver = meter_driver
         self.ledger = Ledger()
         self.history: list[Result] = []

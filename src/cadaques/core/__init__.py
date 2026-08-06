@@ -9,6 +9,7 @@ are resolved lazily to avoid import cycles (canonical homes:
 from .cost import Budget, BudgetExceeded, BudgetView, Cost
 from .ledger import Ledger, Transaction
 from .records import Query, Result
+from .task import Bounds, Constraint, Direction, InvalidQuery, SearchSpace, Task
 
 _MOVED = {
     "Campaign": "cadaques.runtime.campaign",
