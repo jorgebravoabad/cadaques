@@ -2,5 +2,6 @@
 
 from .driver import Driver
 from .oracle import Oracle
+from .resource import JobHandle, JobStatus, OracleResource, Resource
 
-__all__ = ["Driver", "Oracle"]
+__all__ = ["Driver", "JobHandle", "JobStatus", "Oracle", "OracleResource", "Resource"]

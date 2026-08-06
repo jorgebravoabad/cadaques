@@ -15,11 +15,12 @@ from .core.spec import CampaignSpec, SpecError
 from .core.task import InvalidQuery, SearchSpace, Task
 from .protocols.driver import Driver
 from .protocols.oracle import Oracle
+from .protocols.resource import JobHandle, JobStatus, OracleResource, Resource
 
 __version__ = "0.2.0.dev0"
 
 __all__ = [
     "Budget", "BudgetExceeded", "BudgetView", "Campaign", "CampaignResult", "CampaignSpec", "SpecError",
-    "Cost", "Driver", "Event", "EventLog", "DriverStopped", "Ledger", "Oracle", "Query",
+    "Cost", "Driver", "Event", "EventLog", "DriverStopped", "Ledger", "Oracle", "OracleResource", "Query", "Resource",
     "Action", "FailureRecord", "Observation", "ObservationStatus", "Result", "SearchSpace", "store_artifact", "Task", "InvalidQuery", "Transaction", "__version__",
 ]
