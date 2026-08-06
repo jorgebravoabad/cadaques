@@ -4,10 +4,12 @@ An open-source framework for autonomous discovery campaigns:
 any oracle, any driver, one budget. Every query counts.
 """
 
-from .core.campaign import Campaign, CampaignResult, DriverStopped
+from .runtime.campaign import Campaign, CampaignResult, DriverStopped
 from .core.cost import Budget, BudgetExceeded, BudgetView, Cost
 from .core.ledger import Ledger, Transaction
-from .core.protocols import Driver, Oracle, Query, Result
+from .core.records import Query, Result
+from .protocols.driver import Driver
+from .protocols.oracle import Oracle
 
 __version__ = "0.2.0.dev0"
 

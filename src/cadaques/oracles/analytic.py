@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Mapping
 
 from ..core.cost import Cost
-from ..core.protocols import Query, Result
+from ..core.records import Query, Result
 
 
 @dataclass

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..core.cost import Cost
-from ..core.protocols import Query, Result
+from ..core.records import Query, Result
 
 #: Onsager's exact critical temperature (J = k_B = 1).
 T_C_EXACT: float = 2.0 / np.log(1.0 + np.sqrt(2.0))

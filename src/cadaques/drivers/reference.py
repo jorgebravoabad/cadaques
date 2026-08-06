@@ -22,7 +22,7 @@ from typing import Mapping, Sequence
 import numpy as np
 
 from ..core.cost import BudgetView
-from ..core.protocols import Query, Result
+from ..core.records import Query, Result
 
 SearchSpace = Mapping[str, tuple[float, float]]
 
