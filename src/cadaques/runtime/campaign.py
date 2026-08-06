@@ -31,6 +31,7 @@ from ..protocols.oracle import Oracle
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..core.spec import CampaignSpec
+    from .state import CampaignState
 
 StopReason = Literal[
     "budget_exhausted",
@@ -46,7 +47,7 @@ class DriverStopped(Exception):
 
 
 @dataclass
-class CampaignResult:
+class Outcome:
     best: Result | None
     history: list[Result]
     ledger: Ledger
@@ -79,6 +80,19 @@ class CampaignResult:
         return points
 
     _maximize: bool = field(default=True, repr=False)
+
+    @property
+    def state(self) -> "CampaignState":
+        """The derived state: reduce(events) (ADR-0004). Must equal the
+        live fields — CI enforces the equivalence."""
+        from .state import reduce
+
+        return reduce(self.events)
+
+
+#: 0.1 name, kept forever (ADR-0010).
+CampaignResult = Outcome
+
 
 
 class Campaign:
@@ -139,7 +153,7 @@ class Campaign:
         return Ledger.from_events(self.events)
 
     # ------------------------------------------------------------------
-    def run(self, max_queries: int | None = None) -> CampaignResult:
+    def run(self, max_queries: int | None = None) -> Outcome:
         self.events.append(
             "campaign_started",
             oracle=type(self.oracle).__name__,
@@ -262,7 +276,7 @@ class Campaign:
             n_queries=len(self.history),
             spent=self.budget.spent.as_dict(),
         )
-        campaign_result = CampaignResult(
+        campaign_result = Outcome(
             best=best,
             history=self.history,
             ledger=self.ledger,

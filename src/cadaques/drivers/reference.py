@@ -88,6 +88,8 @@ class AnnealedLocalDriver:
         return Query(params=params, fidelity=dict(self.fidelity))
 
     def observe(self, result: Result) -> None:
+        if not getattr(result, "ok", True):  # failures teach nothing here (ADR-0006)
+            return
         if self._best is None or self._improves(result):
             self._best = result
 
