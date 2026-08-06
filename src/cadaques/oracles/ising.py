@@ -53,6 +53,11 @@ class Ising2DOracle:
     def __post_init__(self) -> None:
         self._seed_sequence = np.random.SeedSequence(self.seed)
 
+    def reseed(self, rng: np.random.Generator) -> None:
+        """Adopt a campaign-derived stream (ADR-0012): the campaign
+        seed determines a fresh SeedSequence deterministically."""
+        self._seed_sequence = np.random.SeedSequence(int(rng.integers(0, 2**63 - 1)))
+
     # -- helpers ------------------------------------------------------
     def _fidelity(self, query: Query) -> tuple[int, int, int]:
         fid = query.fidelity

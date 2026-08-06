@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+
+import numpy as np
 from typing import TYPE_CHECKING, Literal, Sequence
 
 from ..core.cost import Budget, Cost
@@ -108,6 +110,7 @@ class Campaign:
         maximize: bool | None = None,
         meter_driver: bool = True,
         max_consecutive_rejections: int = 100,
+        seed: int | None = None,
     ) -> None:
         if task is not None and maximize is not None and maximize != task.maximize:
             raise ValueError("Conflicting 'maximize' and task.direction; pass one.")
@@ -118,6 +121,13 @@ class Campaign:
         self.maximize = task.maximize if task is not None else (True if maximize is None else maximize)
         self.meter_driver = meter_driver
         self.max_consecutive_rejections = max_consecutive_rejections
+        self.seed = seed
+        if seed is not None:
+            children = np.random.SeedSequence(seed).spawn(2)
+            for participant, child in ((driver, children[0]), (oracle, children[1])):
+                reseed = getattr(participant, "reseed", None)
+                if callable(reseed):
+                    reseed(np.random.default_rng(child))
         self.events = EventLog()
         self.history: list[Result] = []
 
@@ -139,6 +149,7 @@ class Campaign:
             meter_driver=self.meter_driver,
             max_consecutive_rejections=self.max_consecutive_rejections,
             max_queries=max_queries,
+            seed=self.seed,
         )
 
     @classmethod
@@ -162,6 +173,7 @@ class Campaign:
             meter_driver=self.meter_driver,
             budget_total=self.budget.total.as_dict(),
             task=self.task.name if self.task is not None else None,
+            seed=self.seed,
             max_queries=max_queries,
         )
 

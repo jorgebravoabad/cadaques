@@ -42,6 +42,10 @@ class RandomDriver:
     def __post_init__(self) -> None:
         self._rng = np.random.default_rng(self.seed)
 
+    def reseed(self, rng: np.random.Generator) -> None:
+        """Adopt a campaign-provided stream (ADR-0012)."""
+        self._rng = rng
+
     def propose(self, history: Sequence[Result], budget: BudgetView) -> Query:
         return Query(params=_uniform_sample(self.space, self._rng), fidelity=dict(self.fidelity))
 
@@ -70,6 +74,10 @@ class AnnealedLocalDriver:
     def __post_init__(self) -> None:
         self._rng = np.random.default_rng(self.seed)
         self._best: Result | None = None
+
+    def reseed(self, rng: np.random.Generator) -> None:
+        """Adopt a campaign-provided stream (ADR-0012)."""
+        self._rng = rng
 
     # -- Driver protocol ------------------------------------------------
     def propose(self, history: Sequence[Result], budget: BudgetView) -> Query:

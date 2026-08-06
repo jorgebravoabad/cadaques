@@ -117,7 +117,7 @@ class CampaignSpec:
     meter_driver: bool = True
     max_consecutive_rejections: int = 100
     max_queries: int | None = None
-    seed: int | None = None  # reserved: campaign-level seed streams (ADR-0012)
+    seed: int | None = None  # campaign-level seed streams (ADR-0012)
     schema: str = SPEC_SCHEMA
 
     # -- serialization ------------------------------------------------
@@ -154,4 +154,5 @@ class CampaignSpec:
             maximize=None if task is not None else self.maximize,
             meter_driver=self.meter_driver,
             max_consecutive_rejections=self.max_consecutive_rejections,
+            seed=self.seed,
         )
