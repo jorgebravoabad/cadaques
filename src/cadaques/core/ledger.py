@@ -71,6 +71,54 @@ class Ledger:
     def __len__(self) -> int:
         return len(self.transactions)
 
+
+
+    # -- derivation (ADR-0004) ---------------------------------------
+    @classmethod
+    def from_events(cls, events) -> "Ledger":
+        """Build the accounting view from a campaign event log.
+
+        driver_proposal events become ``driver`` transactions;
+        oracle_result / oracle_failure events become ``oracle``
+        transactions (failures keep their settled cost and carry
+        ``value=None``, so cost curves count them and value curves
+        skip them). Other event kinds are lifecycle, not accounting.
+        """
+        ledger = cls()
+        for event in events:
+            p = event.payload
+            if event.kind == "driver_proposal":
+                ledger.transactions.append(
+                    Transaction(
+                        kind="driver",
+                        label=p["label"],
+                        declared=Cost.from_dict(p["declared"]),
+                        settled=Cost.from_dict(p["settled"]),
+                        timestamp=event.timestamp,
+                        meta={},
+                    )
+                )
+            elif event.kind in ("oracle_result", "oracle_failure"):
+                meta = {
+                    "value": p.get("value"),
+                    "params": p.get("params", {}),
+                    "fidelity": p.get("fidelity", {}),
+                    "status": p.get("status"),
+                }
+                if event.kind == "oracle_failure":
+                    meta["failure_kind"] = p.get("failure_kind")
+                ledger.transactions.append(
+                    Transaction(
+                        kind="oracle",
+                        label=p["label"],
+                        declared=Cost.from_dict(p["declared"]),
+                        settled=Cost.from_dict(p["settled"]),
+                        timestamp=event.timestamp,
+                        meta=meta,
+                    )
+                )
+        return ledger
+
     # -- persistence ------------------------------------------------
     def to_jsonl(self, path: str | Path) -> Path:
         path = Path(path)

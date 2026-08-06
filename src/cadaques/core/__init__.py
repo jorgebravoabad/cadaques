@@ -7,6 +7,7 @@ are resolved lazily to avoid import cycles (canonical homes:
 """
 
 from .artifacts import ArtifactRef, store_artifact
+from .events import Event, EventLog
 from .cost import Budget, BudgetExceeded, BudgetView, Cost
 from .ledger import Ledger, Transaction
 from .observation import Action, FailureRecord, Observation, ObservationStatus

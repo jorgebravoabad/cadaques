@@ -8,6 +8,7 @@ from .runtime.campaign import Campaign, CampaignResult, DriverStopped
 from .core.cost import Budget, BudgetExceeded, BudgetView, Cost
 from .core.ledger import Ledger, Transaction
 from .core.artifacts import ArtifactRef, store_artifact
+from .core.events import Event, EventLog
 from .core.observation import Action, FailureRecord, Observation, ObservationStatus
 from .core.records import Query, Result
 from .core.task import InvalidQuery, SearchSpace, Task
@@ -18,6 +19,6 @@ __version__ = "0.2.0.dev0"
 
 __all__ = [
     "Budget", "BudgetExceeded", "BudgetView", "Campaign", "CampaignResult",
-    "Cost", "Driver", "DriverStopped", "Ledger", "Oracle", "Query",
+    "Cost", "Driver", "Event", "EventLog", "DriverStopped", "Ledger", "Oracle", "Query",
     "Action", "FailureRecord", "Observation", "ObservationStatus", "Result", "SearchSpace", "store_artifact", "Task", "InvalidQuery", "Transaction", "__version__",
 ]
