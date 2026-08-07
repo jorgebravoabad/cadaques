@@ -58,6 +58,53 @@ print(f"Queries: {outcome.n_queries}, stop reason: {outcome.stop_reason}")
 print(f"Spent: {outcome.budget.spent}")
 ```
 
+## The campaign is a durable object (0.2)
+
+Since 0.2 a campaign is not a script you ran once — it is a declarative,
+inspectable, replayable object:
+
+```python
+from cadaques import Budget, Campaign, Cost, Task, checkpoint, replay, resume
+from cadaques.drivers import RandomDriver
+from cadaques.oracles import Ising2DOracle
+
+task = Task.from_bounds({"T": (1.5, 3.5)}, name="ising_tc")
+campaign = Campaign(
+    Ising2DOracle(), RandomDriver(space=task.space.bounds),
+    Budget(total=Cost(seconds=30.0)),
+    task=task,      # direction, bounds, constraints, success criterion
+    seed=42,        # one campaign seed rules all randomness (ADR-0012)
+)
+
+spec = campaign.to_spec()            # the campaign as portable JSON
+outcome = campaign.run()
+outcome.events.to_jsonl("run.jsonl") # append-only event log: the source of truth
+
+# audit later, with no re-execution — derived state equals the live state:
+assert replay(spec, "run.jsonl") == outcome.state
+
+# or kill it and continue exactly where it stopped:
+checkpoint(campaign, "ckpt/")
+revived = resume("ckpt/")
+```
+
+What this buys, concretely:
+
+- **Event-sourced runtime.** Every transition — start, proposal, rejection,
+  result, failure, stop — is an immutable event (JSONL, schema-versioned).
+  The accounting ledger is a *derived view* of the event log.
+- **Failure is a result.** An oracle exception becomes a FAILED `Result`
+  that settles its declared cost and stays on the record; out-of-task
+  proposals are recorded rejections, never crashes.
+- **Replay and resume.** Final state derives from `(spec, events)` alone;
+  a checkpointed campaign continues query-for-query identically to an
+  uninterrupted one (rng states included).
+- **Specs refuse to lie.** Participants holding callables are not
+  spec-serializable and are refused loudly — a spec is a portable
+  declaration, never a pickled blob.
+- **Conformance suites.** `cadaques.testing` ships the Oracle/Driver/
+  Resource contract checks; external adapters are encouraged to run them.
+
 ## Design principles
 
 - **Dual agnosticism.** Oracles and Drivers are `typing.Protocol` classes with
@@ -94,3 +141,31 @@ DOI: [10.5281/zenodo.21293589](https://doi.org/10.5281/zenodo.21293589)
 ## License
 
 MIT.
+
+## Status, stability and roadmap
+
+**Status: research software, pre-1.0.** The claim of record is the latest
+tagged release — this README describes shipped capability only, and the
+roadmap below is a plan, not a feature list.
+
+*Stability policy (ADR-0010).* Semantic versioning; nothing public breaks
+without a deprecation shim spanning at least two minor releases. The exact
+implementation accompanying the arXiv paper is permanently tagged
+(`v0.1.0`) and its imports run against every release via compatibility
+shims (`cadaques.core.protocols`, `cadaques.core.campaign`,
+`CampaignResult`). Durable design decisions live in `docs/adr/`.
+
+*Kernel (shipped in 0.2).* Task · Query/Result and the general
+Action/Observation envelopes · Driver · Oracle · Resource (with the
+`OracleResource` adapter) · Campaign · Budget · Event · Artifact ·
+Outcome · CampaignSpec — the twelve objects of the campaign
+architecture, with event-sourced state, seed streams, replay,
+checkpoint/resume and public conformance suites.
+
+*Roadmap (not yet shipped).* A Bayesian-optimization driver and a
+hidden-dataset oracle for retrospective studies; a statistics module for
+paired driver comparisons; asynchronous executors and a Slurm-backed
+workflow resource behind the frozen Resource lifecycle (ADR-0007);
+declarative constraint vocabulary for specs; plugin entry points for
+external drivers and oracles. See `ARCHITECTURE.md` and
+`docs/adr/` for boundaries and decision gates.

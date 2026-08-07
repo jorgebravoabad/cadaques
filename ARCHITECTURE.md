@@ -19,9 +19,9 @@ strategy) have veto power over every feature:
 
 | Layer | Modules | May depend on |
 |---|---|---|
-| `core/` | `cost`, `ledger`, `records` (and, per roadmap: `task`, `action`, `observation`, `events`, `artifacts`, `spec`) | stdlib, minimal NumPy |
-| `protocols/` | `driver`, `oracle` (roadmap: `resource`, `executor`) | `core` only |
-| `runtime/` | `campaign` (roadmap: `state`, `reducer`, `checkpoint`, `replay`) | `core`, `protocols` |
+| `core/` | `cost`, `ledger`, `records` `task`, `observation`, `events`, `artifacts`, `spec` | stdlib, minimal NumPy |
+| `protocols/` | `driver`, `oracle`, `resource` (roadmap: `executor`) | `core` only |
+| `runtime/` | `campaign`, `state`, `replay` (roadmap: `executor` integration) | `core`, `protocols` |
 | `drivers/`, `oracles/` | reference implementations | `core`, `protocols` |
 | plugins (external) | BO libraries, schedulers, agents, instruments | public API |
 
@@ -31,17 +31,17 @@ Arrows point inward only. Drivers never import oracles; nothing imports plugins.
 
 | Object | Status | Home |
 |---|---|---|
-| Task | roadmap (0.2) | `core/task.py` |
-| Action / Observation | roadmap (0.2; `Query`/`Result` are their shipped evaluation specializations, ADR-0002) | `core/records.py` |
+| Task | **shipped** (0.2) | `core/task.py` |
+| Action / Observation | **shipped** (0.2; `Query`/`Result` remain their evaluation specializations, ADR-0002) | `core/observation.py`, `core/records.py` |
 | Driver | **shipped** | `protocols/driver.py` |
 | Oracle | **shipped** | `protocols/oracle.py` |
-| Resource | roadmap (ADR-0003 dual protocol) | `protocols/resource.py` |
+| Resource | **shipped** (0.2, ADR-0003 dual protocol; `OracleResource` adapter) | `protocols/resource.py` |
 | Campaign | **shipped** | `runtime/campaign.py` |
 | Budget | **shipped** | `core/cost.py` |
-| Event | roadmap (ledger transactions are its shipped ancestor) | `core/events.py` |
-| Artifact | roadmap | `core/artifacts.py` |
-| Outcome | **shipped** as `CampaignResult` (alias will persist) | `runtime/campaign.py` |
-| CampaignSpec | roadmap (0.2) | `core/spec.py` |
+| Event | **shipped** (0.2; the Ledger is now a derived view) | `core/events.py` |
+| Artifact | **shipped** (0.2) | `core/artifacts.py` |
+| Outcome | **shipped** (0.2 rename; `CampaignResult` alias permanent) | `runtime/campaign.py` |
+| CampaignSpec | **shipped** (0.2) | `core/spec.py` |
 
 The status column is the claim of record: anything marked roadmap is a plan,
 not a capability, and public descriptions must not promote it early.
