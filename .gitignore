@@ -8,3 +8,5 @@ campaign_*.jsonl
 .venv/
 docs/_build/
 docs/_build/
+.DS_Store
+demo_campaign.jsonl # opcional: y ckpt_demo/ si quieres
