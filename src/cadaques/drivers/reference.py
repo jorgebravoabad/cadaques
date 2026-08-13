@@ -28,7 +28,11 @@ SearchSpace = Mapping[str, tuple[float, float]]
 
 
 def _uniform_sample(space: SearchSpace, rng: np.random.Generator) -> dict[str, float]:
-    return {k: float(rng.uniform(low, high)) for k, (low, high) in space.items()}
+    # Parameters are consumed in sorted order so rng usage is independent
+    # of dict key order — a spec round-trip (canonical JSON) or a user
+    # constructing the "same" space in another order must not change a
+    # seeded campaign (ADR-0012 determinism discipline).
+    return {k: float(rng.uniform(low, high)) for k, (low, high) in sorted(space.items())}
 
 
 @dataclass
@@ -88,7 +92,7 @@ class AnnealedLocalDriver:
         sigma_rel = self.sigma_max + (self.sigma_min - self.sigma_max) * frac
 
         params: dict[str, float] = {}
-        for key, (low, high) in self.space.items():
+        for key, (low, high) in sorted(self.space.items()):  # ADR-0012: order-canonical rng use
             width = high - low
             center = float(self._best.query.params[key])
             proposal = center + self._rng.normal(0.0, sigma_rel * width)
