@@ -5,6 +5,7 @@ any oracle, any driver, one budget. Every query counts.
 """
 
 from .runtime.campaign import Campaign, CampaignResult, DriverStopped, Outcome
+from . import stats
 from .runtime.replay import checkpoint, replay, resume
 from .runtime.state import CampaignState, reduce
 from .core.cost import Budget, BudgetExceeded, BudgetView, Cost
