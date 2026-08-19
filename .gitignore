@@ -11,3 +11,4 @@ docs/_build/
 .DS_Store
 demo_campaign.jsonl # opcional: y ckpt_demo/ si quieres
 examples/next_experiments.csv
+studies/results/
