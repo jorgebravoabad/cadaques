@@ -124,6 +124,28 @@ class DatasetOracle:
     def n_rows(self) -> int:
         return len(self.rows)
 
+    def as_history(self) -> list[Result]:
+        """The measured table as campaign history: one COMPLETED Result
+        per row, carrying the row's recorded cost (or the tariff).
+
+        This is recommendation mode's entry point: the table is the
+        *known* past, not a hidden oracle to replay — surrogates fit on
+        all of it, and the output is advice for the next real
+        experiment (see :func:`cadaques.runtime.recommend.recommend`).
+        """
+        history: list[Result] = []
+        for row in self.rows:
+            query = Query(params={p: float(row[p]) for p in self.params})
+            history.append(
+                Result(
+                    query=query,
+                    value=float(row[self.value]),
+                    cost=self._row_cost(row),
+                    info={"source": "dataset_row"},
+                )
+            )
+        return history
+
     # ----------------------------------------------------------- lookup
     def _distance(self, query_params: Mapping[str, Any], row: Mapping[str, Any]) -> float:
         d = 0.0

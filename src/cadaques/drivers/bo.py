@@ -195,5 +195,62 @@ class BayesianDriver:
             acquisition = sigma / predicted_cost
         return self._to_query(candidates[int(np.argmax(acquisition))])
 
+    def rank(
+        self,
+        history: Sequence[Result],
+        k: int = 10,
+        *,
+        pool: np.ndarray | None = None,
+        pool_size: int | None = None,
+    ) -> list[dict]:
+        """Score a candidate pool against the full history; return the
+        top-``k`` as dicts with params, prediction, uncertainty,
+        acquisition, predicted cost and score per unit cost.
+
+        This is recommendation mode: the surrogates fit on *all* the
+        (successful) history, the pool is sampled inside the space
+        (or supplied), and nothing is executed — the ranked list is
+        advice for the next real experiments. Deterministic given the
+        driver's rng state (ADR-0012).
+        """
+        X, y, costs = self._training_set(history)
+        if len(y) < 2:
+            raise ValueError("rank() needs at least two successful results to fit on")
+        y_fit = y if self.maximize else -y
+        gp = self._fit_gp(X, y_fit)
+
+        n = pool_size or max(self.n_candidates, 4 * k)
+        candidates = pool if pool is not None else self._sample(n)
+
+        mu, sigma = gp.predict(candidates, return_std=True)
+        sigma = np.maximum(sigma, 1e-12)
+        best = float(np.max(y_fit))
+        z = (mu - best - self.xi_min) / sigma
+        ei = np.maximum((mu - best - self.xi_min) * _norm_cdf(z) + sigma * _norm_pdf(z), 0.0)
+
+        predicted_cost = np.ones_like(ei)
+        if self.cost_aware and len(np.unique(costs)) > 1:
+            cost_gp = self._fit_gp(X, np.log(costs))
+            predicted_cost = np.maximum(np.exp(cost_gp.predict(candidates)), 1e-12)
+        score = ei / predicted_cost
+        if not np.any(score > 0):
+            score = sigma / predicted_cost  # flat-EI fallback, still cost-aware
+
+        order = np.argsort(-score)[: int(k)]
+        out = []
+        for idx in order:
+            i = int(idx)
+            out.append(
+                {
+                    "params": {name: float(v) for name, v in zip(self._names, candidates[i])},
+                    "predicted_value": float(mu[i] if self.maximize else -mu[i]),
+                    "uncertainty": float(sigma[i]),
+                    "acquisition": float(ei[i]),
+                    "predicted_cost": float(predicted_cost[i]),
+                    "score_per_cost": float(score[i]),
+                }
+            )
+        return out
+
     def observe(self, result: Result) -> None:  # history arrives via propose()
         pass
