@@ -5,7 +5,7 @@ the pre-1.0 stability policy. The claim of record is the latest tag.
 
 ## [Unreleased]
 
-## [0.2.0] — 2026-08
+## [0.2.0] — 2026-08 — DOI: [10.5281/zenodo.21915298](https://doi.org/10.5281/zenodo.21915298)
 
 The campaign becomes a durable object: the twelve-object kernel of the
 campaign architecture, event-sourced and replayable, with full 0.1
