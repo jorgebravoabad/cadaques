@@ -21,7 +21,8 @@ per unit cost. *Every query counts.*
 ## Installation
 
 ```bash
-pip install cadaques
+pip install cadaques          # core: NumPy only
+pip install "cadaques[bo]"    # + the Gaussian-process driver (scikit-learn)
 ```
 
 Or, for development, install the latest version from source:
@@ -58,7 +59,7 @@ print(f"Queries: {outcome.n_queries}, stop reason: {outcome.stop_reason}")
 print(f"Spent: {outcome.budget.spent}")
 ```
 
-## The campaign is a durable object (0.2)
+## The campaign is a durable object (since 0.2)
 
 Since 0.2 a campaign is not a script you ran once — it is a declarative,
 inspectable, replayable object:
@@ -105,10 +106,62 @@ What this buys, concretely:
 - **Conformance suites.** `cadaques.testing` ships the Oracle/Driver/
   Resource contract checks; external adapters are encouraged to run them.
 
+## From a spreadsheet to the next experiments (0.3)
+
+The first domain vertical. A chemist declares column roles once — composition
+descriptors, reaction conditions, an objective, a recorded cost per run — and
+the table compiles to kernel objects:
+
+```python
+from cadaques.verticals import ReactionTable
+
+table = ReactionTable.from_csv(
+    "reactions.csv",
+    objective="c2_yield",
+    composition=("x_Mn", "x_Ce"),
+    conditions=("T", "P"),
+    cost_columns={"seconds": "run_s"},
+)
+
+# Recommendation mode: which experiments should the lab run next?
+ranking = table.recommend_next(k=5, seed=42)     # requires: pip install "cadaques[bo]"
+print(ranking.summary())
+ranking.to_csv("next_experiments.csv")           # for the lab notebook
+
+# Campaign mode: would Bayesian optimization have beaten random on this table?
+from cadaques import Budget, Cost
+from cadaques.drivers import BayesianDriver, RandomDriver
+from cadaques.stats import paired_campaigns
+
+result = paired_campaigns(
+    lambda seed: table.campaign(BayesianDriver(space=table.oracle().bounds),
+                                Budget(total=Cost(seconds=25000)), seed=seed),
+    lambda seed: table.campaign(RandomDriver(space=table.oracle().bounds),
+                                Budget(total=Cost(seconds=25000)), seed=seed),
+    seeds=range(20), metric=lambda o: o.best.value, alternative="greater",
+)
+print(result.summary())   # paired bootstrap CI + Wilcoxon, quotable as-is
+```
+
+Behind this sit the 0.3 components: **`DatasetOracle`** (a measured table as a
+hidden oracle, with a *declared* miss policy — a dataset miss is a FAILED result
+that settles its declared cost — and deterministic economics that can replay
+recorded per-row costs); **`BayesianDriver`** (Matérn GP with Expected
+Improvement *per predicted unit cost*, learned from the driver's own settled
+history, exploration annealed with `fraction_used`); **`cadaques.stats`** (paired
+bootstrap and Wilcoxon on NumPy alone, exact null to n=25); and **recommendation
+mode** (`recommend()` → a ranked, seeded, bit-for-bit reproducible object whose
+provenance records the driver's declaration, a fingerprint of the history, and
+the measured *thinking time* — the price of intelligence, attached to the advice
+it produced). A frozen retrospective-benchmark protocol over four public
+datasets lives in `studies/`.
+
 ## Design principles
 
 - **Dual agnosticism.** Oracles and Drivers are `typing.Protocol` classes with
-  two methods each. Anything that speaks the protocol plugs in.
+  two methods each. Anything that speaks the protocol plugs in. Since 0.2 the
+  dual architecture has an operational counterpart: `Resource`
+  (submit/status/collect) with an `OracleResource` adapter.
 - **Declared vs. settled cost.** Oracles declare a price *ex ante*
   (`oracle.price(query)`); the actual cost is settled *ex post* inside each
   `Result`. Real oracles deviate from their estimates — the ledger records both,
@@ -116,31 +169,15 @@ What this buys, concretely:
 - **Both sides are metered.** Driver decisions cost wall time — and tokens, if the
   driver is an LLM agent. A campaign's economics include the price of intelligence,
   enabling the question: *when does an expensive smart driver beat a cheap dumb one?*
+- **Failure is a result.** A failed evaluation — an oracle exception, a dataset
+  miss — settles its declared cost and stays on the record, exactly like a wasted
+  experiment.
 - **Budget-aware strategies.** Drivers receive a read-only `BudgetView` and may
   adapt: the reference `AnnealedLocalDriver` explores while rich and exploits
-  while poor.
-- **The ledger is the provenance.** Every transaction (declared, settled,
-  timestamped) exports to JSONL: a complete, replayable trace of the campaign.
-
-## Status and roadmap
-
-`0.1.0` — core protocols, campaign runner, multi-currency budget and ledger,
-reference drivers, and a canonical Ising-2D oracle with fidelity-dependent cost.
-Available on [PyPI](https://pypi.org/project/cadaques/) and archived on
-[Zenodo](https://doi.org/10.5281/zenodo.21293589).
-
-This is an early release: the API may evolve until `1.0`. Planned next steps
-include a Bayesian-optimization driver, campaign replay, expanded documentation,
-and an LLM-agent driver adapter.
-
-## Citation
-
-If you use CADAQUES in academic work, please cite it (see `CITATION.cff`).
-DOI: [10.5281/zenodo.21293589](https://doi.org/10.5281/zenodo.21293589)
-
-## License
-
-MIT.
+  while poor; `BayesianDriver` anneals its exploration margin the same way.
+- **The event log is the provenance.** Every transition (declared, settled,
+  timestamped, schema-versioned) exports to JSONL: a complete, replayable trace
+  of the campaign, from which the accounting ledger is derived.
 
 ## Status, stability and roadmap
 
@@ -150,22 +187,40 @@ roadmap below is a plan, not a feature list.
 
 *Stability policy (ADR-0010).* Semantic versioning; nothing public breaks
 without a deprecation shim spanning at least two minor releases. The exact
-implementation accompanying the arXiv paper is permanently tagged
-(`v0.1.0`) and its imports run against every release via compatibility
-shims (`cadaques.core.protocols`, `cadaques.core.campaign`,
-`CampaignResult`). Durable design decisions live in `docs/adr/`.
+implementation accompanying v1 of the arXiv paper is permanently tagged
+(`v0.1.0-paper`), and its imports run against every release via compatibility
+shims (`cadaques.core.protocols`, `cadaques.core.campaign`, `CampaignResult`).
+Durable design decisions live in `docs/adr/`.
 
 *Kernel (shipped in 0.2).* Task · Query/Result and the general
 Action/Observation envelopes · Driver · Oracle · Resource (with the
 `OracleResource` adapter) · Campaign · Budget · Event · Artifact ·
 Outcome · CampaignSpec — the twelve objects of the campaign
 architecture, with event-sourced state, seed streams, replay,
-checkpoint/resume and public conformance suites.
+checkpoint/resume and public conformance suites (`cadaques.testing`).
 
-*Roadmap (not yet shipped).* A Bayesian-optimization driver and a
-hidden-dataset oracle for retrospective studies; a statistics module for
-paired driver comparisons; asynchronous executors and a Slurm-backed
-workflow resource behind the frozen Resource lifecycle (ADR-0007);
-declarative constraint vocabulary for specs; plugin entry points for
-external drivers and oracles. See `ARCHITECTURE.md` and
-`docs/adr/` for boundaries and decision gates.
+*Generality proof (shipped in 0.3).* `DatasetOracle` for retrospective
+campaigns over measured tables; the cost-aware `BayesianDriver` (extra
+`cadaques[bo]`); the audited `cadaques.stats` module; recommendation mode
+(`recommend()`, `RankedCandidates`); the chemistry vertical
+(`ReactionTable`); and the frozen study protocol in `studies/`.
+
+*Roadmap (not yet shipped).* Asynchronous executors and a Slurm-backed
+workflow resource behind the frozen Resource lifecycle (ADR-0007); a
+portfolio Driver allocating budget across strategies as a cost-aware
+bandit; native categorical and mixed search spaces; declarative
+constraint vocabulary for specs; plugin entry points for external
+drivers and oracles; an LLM-agent driver adapter with token metering.
+See `ARCHITECTURE.md` and `docs/adr/` for boundaries and decision gates.
+
+## Citation
+
+If you use CADAQUES in academic work, please cite it (see `CITATION.cff`).
+Concept DOI (always resolves to the latest version):
+[10.5281/zenodo.21293589](https://doi.org/10.5281/zenodo.21293589).
+Version DOIs are listed per release in [`CHANGELOG.md`](CHANGELOG.md).
+Paper: [arXiv:2607.16127](https://arxiv.org/abs/2607.16127).
+
+## License
+
+MIT.
