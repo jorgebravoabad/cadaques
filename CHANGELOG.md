@@ -4,7 +4,52 @@ All notable changes to CADAQUES. Semantic versioning; see ADR-0010 for
 the pre-1.0 stability policy. The claim of record is the latest tag.
 
 ## [Unreleased]
-## [0.3.0] — 2026-08
+
+## [0.3.0] — 2026-08 — DOI: [10.5281/zenodo.22028069](https://doi.org/10.5281/zenodo.22028069) 
+
+The generality proof: retrospective campaigns over real data, cost-aware
+intelligence, audited statistics, recommendation mode, and the first
+domain vertical — on the unchanged 0.2 kernel.
+
+### Added
+- **DatasetOracle** (`oracles/dataset.py`): a measured table as an Oracle —
+  declared miss policy (`nearest` within normalized tolerance, or FAILED
+  `dataset_miss` settling the tariff: a miss consumes budget), deterministic
+  economics with optional per-row recorded cost columns, `from_csv`,
+  data-derived `.bounds`, and `.as_history()` for recommendation mode.
+- **BayesianDriver** (`drivers/bo.py`, extra `cadaques[bo]`): Matérn GP +
+  Expected Improvement per predicted unit cost (cost surrogate fitted on the
+  driver's own settled history), budget-annealed exploration via
+  `fraction_used`, cost-aware flat-EI fallback, `rank()` for batch scoring;
+  scikit-learn stays out of core (lazy import).
+- **cadaques.stats**: paired bootstrap CI and Wilcoxon signed-rank on NumPy
+  alone (exact null to n=25, tie/continuity-corrected approximation beyond),
+  `compare()`/`Comparison.summary()`, and seed-paired `paired_campaigns()`.
+- **Recommendation mode** (`runtime/recommend.py`): `recommend()` →
+  `RankedCandidates` — seeded bit-for-bit reproducible, provenanced (driver
+  spec, history sha256, schema `cadaques.recommendation/1`), metered thinking
+  time, `to_csv`/`to_json`; task constraints filter the candidate pool
+  *before* ranking.
+- **Chemistry vertical** (`verticals/chemistry.py`): `ReactionTable` — column
+  roles (composition, conditions, objective, cost) compiled to kernel
+  objects; `recommend_next()` and `campaign()` frontends; end-to-end
+  `examples/chemistry_recommend.py`.
+- **Studies package** (`studies/`): frozen protocol v1 for the vertical paper
+  — pinned quartet (Ising, OCM-291 featurized, Olympus snar/fullerenes with
+  real per-row costs), 20 paired seeds × 4 drivers, pre-registered honesty
+  notes, `run_study.py --smoke` verified on all four.
+
+### Changed
+- Reference drivers consume rng in **sorted parameter order** (ADR-0012), so
+  canonical-JSON spec round-trips and dict orderings cannot alter a seeded
+  campaign. Seeded sequences differ from 0.2 in multi-parameter spaces; the
+  paper reproduction stays pinned at `v0.1.0-paper`.
+- CI runs on all branches and installs `[dev,bo]`.
+
+### Compatibility
+- No interface changes; all 0.2 and 0.1 imports and constructor calls
+  unchanged; 107 tests.
+
 ## [0.2.0] — 2026-08 — DOI: [10.5281/zenodo.21915298](https://doi.org/10.5281/zenodo.21915298)
 
 The campaign becomes a durable object: the twelve-object kernel of the
