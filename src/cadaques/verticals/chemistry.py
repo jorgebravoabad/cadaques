@@ -179,8 +179,10 @@ class ReactionTable:
         *,
         driver: Any = None,
         constraints: tuple[Constraint, ...] = (),
-        seed: int | None = None,
+        pool: Any = None,
         pool_size: int = 1024,
+        exclude_measured: bool = True,
+        seed: int | None = None,
     ) -> RankedCandidates:
         """Recommendation mode: the ranked next experiments.
 
@@ -194,8 +196,10 @@ class ReactionTable:
             driver,
             k=k,
             task=self.task(constraints=constraints),
-            seed=seed,
+            pool=pool,
             pool_size=pool_size,
+            exclude_measured=exclude_measured,
+            seed=seed,
         )
 
     def campaign(

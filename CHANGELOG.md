@@ -5,6 +5,21 @@ the pre-1.0 stability policy. The claim of record is the latest tag.
 
 ## [Unreleased]
 
+### Added
+- `recommend()` accepts a finite candidate `pool=` (array in sorted
+  parameter order, or parameter dicts) and an `exclude_measured=True`
+  policy: successfully measured points are filtered out *before* ranking
+  (constraint-filtering precedent), failed points remain recommendable,
+  and replicates are available via `exclude_measured=False`; pool policy
+  is recorded in the recommendation provenance. `BayesianDriver.rank()`
+  validates the supplied pool's shape and documents that pool policy
+  belongs to `recommend()`. Originates from an external review patch;
+  the exclusion was relocated from the driver to the orchestrator.
+
+### Fixed
+- `ARCHITECTURE.md` no longer describes `Resource` as forthcoming
+  (shipped in 0.2). (External review.)
+
 ## [0.3.0] — 2026-08 — DOI: [10.5281/zenodo.22028069](https://doi.org/10.5281/zenodo.22028069) 
 
 The generality proof: retrospective campaigns over real data, cost-aware

@@ -3,7 +3,7 @@
 *The campaign is the aggregate root. Everything else is a replaceable participant.*
 
 CADAQUES organises autonomous discovery around one invariant loop: a **Driver**
-proposes, an **Oracle** (or, soon, a **Resource**) evaluates at a price, the
+proposes, an **Oracle** or a **Resource** evaluates at a price, the
 **Campaign** validates, accounts and records, and the loop ends when the
 **Budget** is exhausted — not when an iteration counter runs out.
 

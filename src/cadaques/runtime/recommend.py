@@ -148,7 +148,9 @@ def recommend(
     *,
     k: int = 10,
     task: Task | None = None,
+    pool: Any = None,
     pool_size: int = 1024,
+    exclude_measured: bool = True,
     seed: int | None = None,
 ) -> RankedCandidates:
     """Rank the next experiments from a measured history.
@@ -168,8 +170,24 @@ def recommend(
     task:
         Optional Task; its constraints filter the pool, and its
         direction configures the default driver.
+    pool:
+        Optional finite candidate library: an array of shape
+        ``(n, n_parameters)`` in sorted parameter order, or a sequence
+        of parameter dicts. When given, no sampling occurs — the
+        ranking chooses among exactly these candidates (a compound
+        catalog, a stock list, a design grid).
     pool_size:
-        Candidate pool sampled inside the space.
+        Candidate pool sampled inside the space when no ``pool`` is
+        supplied.
+    exclude_measured:
+        Drop candidates already present in the successful history
+        before ranking (default). Advice that re-runs a measured
+        experiment is useless for a finite library — but replicates
+        are legitimate science, so pass ``False`` to allow them.
+        Failed points (e.g. retryable errors, dataset misses) are
+        never excluded: they were not successfully measured. With a
+        sampled continuous pool this filter is a no-op in practice
+        (exact float collisions have measure zero).
     seed:
         Reseeds the driver (ADR-0012); same inputs + seed → same
         ranking.
@@ -214,13 +232,36 @@ def recommend(
     if seed_children is not None and callable(getattr(driver, "reseed", None)):
         driver.reseed(np.random.default_rng(seed_children[0]))
 
-    # -- constrained pool: filter BEFORE ranking ---------------------------
-    # Candidates violating the task should never be scored; the pool is
-    # sampled here (constraint-aware) and handed to the driver, in the
-    # canonical sorted-parameter column order (ADR-0012).
-    pool = None
-    if task is not None and task.constraints:
-        names = sorted(bounds)
+    # -- pool policy: all filtering happens BEFORE ranking -----------------
+    # Candidates violating the task, and (by default) candidates already
+    # successfully measured, are never scored; the driver receives the
+    # filtered pool in canonical sorted-parameter column order (ADR-0012).
+    names = sorted(bounds)
+
+    if pool is not None:
+        rows = list(pool)
+        if rows and isinstance(rows[0], Mapping):
+            missing = [n for n in names if n not in rows[0]]
+            if missing:
+                raise ValueError(f"pool dicts lack parameters {missing}")
+            pool = np.array([[float(row[n]) for n in names] for row in rows])
+        else:
+            pool = np.asarray(pool, dtype=float)
+        if pool.ndim != 2 or pool.shape[1] != len(names):
+            raise ValueError(
+                "pool must have shape (n_candidates, n_parameters) "
+                f"with parameter order {tuple(names)}"
+            )
+        if task is not None and task.constraints:
+            keep = [
+                i for i in range(len(pool))
+                if all(
+                    con.satisfied({n: float(v) for n, v in zip(names, pool[i])})
+                    for con in task.constraints
+                )
+            ]
+            pool = pool[keep]
+    elif task is not None and task.constraints:
         pool_rng = (
             np.random.default_rng(seed_children[1])
             if seed_children is not None
@@ -244,6 +285,33 @@ def recommend(
             )
         pool = np.array(kept[:pool_size])
 
+    # -- exclusion of already-measured candidates (policy, not mechanism) --
+    if exclude_measured and pool is not None and len(pool):
+        measured = np.array(
+            [
+                [float(res.query.params[n]) for n in names]
+                for res in history
+                if getattr(res, "ok", True) and all(n in res.query.params for n in names)
+            ]
+        )
+        if len(measured):
+            already = np.any(
+                np.all(
+                    np.isclose(pool[:, None, :], measured[None, :, :],
+                               rtol=1e-12, atol=1e-12),
+                    axis=2,
+                ),
+                axis=1,
+            )
+            pool = pool[~already]
+    if pool is not None and len(pool) == 0:
+        raise ValueError(
+            "Every candidate in the supplied pool was filtered out "
+            "(constraints and/or already measured). Enlarge the pool, relax "
+            "the constraints, or pass exclude_measured=False to allow "
+            "replicates."
+        )
+
     # -- rank (metered: the price of intelligence) ------------------------
     t0 = time.perf_counter()
     raw = rank_fn(history, k, pool=pool, pool_size=pool_size)
@@ -266,6 +334,9 @@ def recommend(
         "seed": seed,
         "k": k,
         "pool_size": pool_size,
+        "pool_supplied": pool is not None,
+        "pool_n_after_filters": int(len(pool)) if pool is not None else None,
+        "exclude_measured": exclude_measured,
         "metering": {"rank_seconds": rank_seconds},
         "created_at": time.time(),
     }

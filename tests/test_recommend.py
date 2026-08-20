@@ -9,6 +9,7 @@ import pytest
 pytest.importorskip("sklearn")
 
 from cadaques import RankedCandidates, Task, recommend
+from cadaques.oracles import DatasetOracle as _DS  # noqa: F401
 from cadaques.drivers import BayesianDriver, RandomDriver
 from cadaques.oracles import DatasetOracle
 
@@ -99,3 +100,73 @@ def test_summary_is_readable():
     rec = recommend(oracle(), k=2, seed=9, pool_size=256)
     s = rec.summary()
     assert "#1" in s and "score/cost" in s and "thinking time" in s
+
+
+class TestFinitePoolPolicy:
+    """External-review follow-up: measured-point exclusion as pool policy
+    in recommend(), not driver mechanism (constraint-filtering precedent)."""
+
+    def _pool_dicts(self):
+        # 3 of these 5 are exactly measured rows of ROWS
+        return [
+            {"T": 700.0, "P": 1.0},   # measured
+            {"T": 725.0, "P": 1.2},   # new
+            {"T": 800.0, "P": 1.5},   # measured
+            {"T": 805.0, "P": 1.55},  # new
+            {"T": 850.0, "P": 2.0},   # measured
+        ]
+
+    def test_measured_candidates_are_excluded_by_default(self):
+        rec = recommend(oracle(), k=10, pool=self._pool_dicts(), seed=1)
+        got = {(round(c.params["T"], 6), round(c.params["P"], 6)) for c in rec}
+        assert got == {(725.0, 1.2), (805.0, 1.55)}
+        assert rec.provenance["pool_supplied"] is True
+        assert rec.provenance["exclude_measured"] is True
+        assert rec.provenance["pool_n_after_filters"] == 2
+
+    def test_fully_measured_pool_fails_with_actionable_message(self):
+        measured_only = [d for d in self._pool_dicts()
+                         if d not in ({"T": 725.0, "P": 1.2}, {"T": 805.0, "P": 1.55})]
+        with pytest.raises(ValueError, match="exclude_measured=False"):
+            recommend(oracle(), k=3, pool=measured_only, seed=1)
+
+    def test_opt_out_allows_replicates(self):
+        measured_only = [{"T": 700.0, "P": 1.0}, {"T": 800.0, "P": 1.5}]
+        rec = recommend(oracle(), k=5, pool=measured_only,
+                        exclude_measured=False, seed=1)
+        assert len(rec) == 2  # replicates are legitimate science, on request
+
+    def test_array_pool_and_sorted_column_order(self):
+        import numpy as np
+        # sorted(bounds) order is (P, T)
+        arr = np.array([[1.2, 725.0], [1.55, 805.0]])
+        rec = recommend(oracle(), k=5, pool=arr, seed=1)
+        assert {round(c.params["T"], 6) for c in rec} == {725.0, 805.0}
+
+    def test_pool_dict_missing_parameter_is_refused(self):
+        with pytest.raises(ValueError, match="lack parameters"):
+            recommend(oracle(), k=2, pool=[{"T": 725.0}], seed=1)
+
+    def test_failed_points_are_not_excluded_but_measured_are(self):
+        from cadaques import Cost, FailureRecord, Query, Result
+
+        o = DatasetOracle(
+            rows=[{"T": 700.0, "P": 1.0, "y": 0.20},
+                  {"T": 800.0, "P": 1.5, "y": 0.40}],
+            value="y", tariff={"seconds": 1.0},
+        )
+        failed = Result.failed(
+            Query(params={"T": 725.0, "P": 1.2}), cost=Cost(seconds=1.0),
+            failure=FailureRecord(kind="dataset_miss", retryable=True),
+        )
+        hist = o.as_history() + [failed]
+        drv = BayesianDriver(space={"T": (600.0, 900.0), "P": (0.5, 2.5)},
+                             n_initial=2, seed=0)
+
+        # the previously FAILED point is still recommendable...
+        rec = recommend(hist, driver=drv, k=2, pool=[{"T": 725.0, "P": 1.2}], seed=1)
+        assert len(rec) == 1 and rec.best.params["T"] == 725.0
+
+        # ...while a successfully measured one is excluded
+        with pytest.raises(ValueError, match="exclude_measured=False"):
+            recommend(hist, driver=drv, k=2, pool=[{"T": 700.0, "P": 1.0}], seed=1)

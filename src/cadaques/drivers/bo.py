@@ -211,7 +211,11 @@ class BayesianDriver:
         (successful) history, the pool is sampled inside the space
         (or supplied), and nothing is executed — the ranked list is
         advice for the next real experiments. Deterministic given the
-        driver's rng state (ADR-0012).
+        driver's rng state (ADR-0012). This method scores exactly what
+        it is given (supplied pools use sorted parameter column order);
+        pool *policy* — constraints, exclusion of already-measured
+        points — belongs to :func:`cadaques.runtime.recommend.recommend`,
+        which filters before ranking.
         """
         X, y, costs = self._training_set(history)
         if len(y) < 2:
@@ -220,7 +224,14 @@ class BayesianDriver:
         gp = self._fit_gp(X, y_fit)
 
         n = pool_size or max(self.n_candidates, 4 * k)
-        candidates = pool if pool is not None else self._sample(n)
+        candidates = np.asarray(
+            pool if pool is not None else self._sample(n), dtype=float
+        )
+        if candidates.ndim != 2 or candidates.shape[1] != len(self._names):
+            raise ValueError(
+                "pool must have shape (n_candidates, n_parameters) "
+                f"with parameter order {self._names}"
+            )
 
         mu, sigma = gp.predict(candidates, return_std=True)
         sigma = np.maximum(sigma, 1e-12)

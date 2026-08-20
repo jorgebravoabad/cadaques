@@ -83,3 +83,19 @@ def test_survives_failed_history():
                    seed=2, meter_driver=False).run(max_queries=6)
     assert out.n_queries == 6      # misses everywhere, still proposes
     assert out.n_failures >= 5
+
+
+def test_rank_validates_supplied_pool_shape():
+    # External-review fix: rank() owns the array contract and names the
+    # required column order in its error.
+    driver = BayesianDriver(space={"x": (0.0, 1.0)}, cost_aware=False, seed=7)
+    history = [  # two successes so the surrogate can fit
+        __import__("cadaques").Result(
+            query=__import__("cadaques").Query(params={"x": v}),
+            value=v, cost=__import__("cadaques").Cost(seconds=1.0))
+        for v in (0.2, 0.8)
+    ]
+    with pytest.raises(ValueError, match="pool must have shape"):
+        driver.rank(history, pool=np.array([[0.2, 0.3]]))
+    with pytest.raises(ValueError, match="pool must have shape"):
+        driver.rank(history, pool=np.array([0.2, 0.3]))
