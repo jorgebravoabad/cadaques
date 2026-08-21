@@ -3,12 +3,13 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
-campaign_*.jsonl
 .coverage
 .venv/
-docs/_build/
-docs/_build/
 .DS_Store
-demo_campaign.jsonl # opcional: y ckpt_demo/ si quieres
+docs/_build/
+campaign_*.jsonl
+demo_campaign.jsonl
+ckpt_demo/
+run.jsonl
 examples/next_experiments.csv
 studies/results/

@@ -27,6 +27,9 @@ docs = ["sphinx>=8", "furo"]
 
 [project.urls]
 Repository = "https://github.com/jorgebravoabad/cadaques"
+Changelog = "https://github.com/jorgebravoabad/cadaques/blob/main/CHANGELOG.md"
+Paper = "https://arxiv.org/abs/2607.16127"
+Issues = "https://github.com/jorgebravoabad/cadaques/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cadaques"]

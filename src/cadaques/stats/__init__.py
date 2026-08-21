@@ -85,7 +85,7 @@ def wilcoxon_signed_rank(
     """Wilcoxon signed-rank test for paired samples.
 
     Returns ``(W_plus, p_value)``. Zero differences are discarded
-    (Wilcoxon's convention); ties among |differences| receive average
+    (Wilcoxon's convention); ties among ``|differences|`` receive average
     ranks. Exact null distribution for n <= 25 without ties; normal
     approximation with tie correction and continuity correction
     otherwise. ``alternative``: ``"two-sided"``, ``"greater"``

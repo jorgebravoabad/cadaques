@@ -2,6 +2,7 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21293589.svg)](https://doi.org/10.5281/zenodo.21293589)
 [![PyPI](https://img.shields.io/pypi/v/cadaques.svg)](https://pypi.org/project/cadaques/)
+[![CI](https://github.com/jorgebravoabad/cadaques/actions/workflows/ci.yml/badge.svg)](https://github.com/jorgebravoabad/cadaques/actions/workflows/ci.yml)
 
 **Cost-Aware Dual Architecture for QUery-Efficient diScovery**
 
