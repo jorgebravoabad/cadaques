@@ -23,6 +23,7 @@ strategy) have veto power over every feature:
 | `protocols/` | `driver`, `oracle`, `resource` (roadmap: `executor`) | `core` only |
 | `runtime/` | `campaign`, `state`, `replay` (roadmap: `executor` integration) | `core`, `protocols` |
 | `drivers/`, `oracles/` | reference implementations | `core`, `protocols` |
+| `agent/` | `tools`, `store`, `errors`, `schema`, `components`, front ends `cli`, `mcp_server` | `core`, `protocols`, `runtime`, shipped participants |
 | plugins (external) | BO libraries, schedulers, agents, instruments | public API |
 
 Arrows point inward only. Drivers never import oracles; nothing imports plugins.
@@ -45,6 +46,22 @@ Arrows point inward only. Drivers never import oracles; nothing imports plugins.
 
 The status column is the claim of record: anything marked roadmap is a plan,
 not a capability, and public descriptions must not promote it early.
+
+## The agent surface (unreleased, ADR-0013/0014)
+
+`cadaques.agent` exposes the kernel to agents as typed tools over
+persistent campaigns. It adds no kernel object: reservations are events,
+attribution is two fields on every event, and the tools are a view of
+the runtime with the same invariants. Its claims of record:
+
+| Property | Where it is enforced |
+|---|---|
+| Every operation is a tool with a typed input and output schema | `agent/tools.py` (`TOOLS`) |
+| Capabilities are queryable | `describe_capabilities`, `get_campaign_status` |
+| Errors are structured and say what to do next | `agent/errors.py` (`ERROR_CODES`) |
+| Mutations are idempotent; campaigns resume from disk | `request_id` journal, `agent/store.py` |
+| The kernel admits work and owns the record | reservations against budget, `evaluation_*` events |
+| Every event records its actor | `Event.actor`, `Event.request_id` (`cadaques.events/2`) |
 
 ## Decision log
 

@@ -5,7 +5,33 @@ the pre-1.0 stability policy. The claim of record is the latest tag.
 
 ## [Unreleased]
 
+The agent-first surface: the kernel operated through typed tools by
+agents and people alike, with the asynchronous, agent-operated
+evaluation path the 0.1 paper listed as future work (ADR-0013, ADR-0014).
+
 ### Added
+- **Agent surface** (`cadaques.agent`): eleven tools with JSON-Schema
+  inputs and outputs and side-effect annotations
+  (`describe_capabilities`, `validate_spec`, `create_campaign`,
+  `list_campaigns`, `get_campaign_status`, `get_events`,
+  `reserve_evaluation`, `settle_evaluation`, `cancel_evaluation`,
+  `run_campaign`, `stop_campaign`); one response envelope; structured
+  errors from a closed vocabulary with `retryable` and `next_actions`;
+  file-backed workspace with per-campaign locks, so campaigns outlive
+  sessions and processes; `request_id` idempotency with crash-window
+  recovery; allowlist of spec-declarable participants.
+- **Front ends**: `cadaques-agent call|schemas` JSON command line and
+  `cadaques-agent serve-mcp` (extra `cadaques[mcp]`, MCP SDK 2.x).
+- **Reservations** (ADR-0014): `evaluation_reserved` /
+  `evaluation_cancelled` events; admission against declared cost plus
+  outstanding reservations; settlement and cancellation always charged;
+  `CampaignState.reserved`, `.pending`, `.n_cancelled`.
+- **ExternalOracle** (`oracles/external.py`): declared-cost model for
+  evaluations run outside the process (tariff with an optional power law
+  in fidelity knobs). **ExternalDriver** (`drivers/external.py`): the
+  operator proposes every point and reports its decision cost.
+- `Campaign.run(actor=..., request_id=...)` attributes library runs too;
+  new stop reason `operator_stopped`; `TERMINAL_STOP_REASONS`.
 - `recommend()` accepts a finite candidate `pool=` (array in sorted
   parameter order, or parameter dicts) and an `exclude_measured=True`
   policy: successfully measured points are filtered out *before* ranking
@@ -15,6 +41,13 @@ the pre-1.0 stability policy. The claim of record is the latest tag.
   validates the supplied pool's shape and documents that pool policy
   belongs to `recommend()`. Originates from an external review patch;
   the exclusion was relocated from the driver to the orchestrator.
+
+### Changed
+- Events are written as `cadaques.events/2`, with `actor` and
+  `request_id` on every event; schema-1 logs still load.
+- `EventLog.to_jsonl` and `checkpoint()` write atomically; the event
+  log is written last and is the commit point.
+- Resumed failures keep their `retryable` flag.
 
 ### Fixed
 - `ARCHITECTURE.md` no longer describes `Resource` as forthcoming

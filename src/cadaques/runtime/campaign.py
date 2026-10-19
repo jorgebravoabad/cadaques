@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass, field
 
 import numpy as np
-from typing import TYPE_CHECKING, Literal, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 
 from ..core.cost import Budget, Cost
 from ..core.events import EventLog
@@ -41,7 +41,14 @@ StopReason = Literal[
     "driver_stopped",
     "rejection_limit",
     "success",
+    "operator_stopped",
 ]
+
+#: Stop reasons after which no new work may be admitted. ``max_queries``
+#: is a pause, not an end: a resumed campaign may continue past it.
+TERMINAL_STOP_REASONS: frozenset[str] = frozenset(
+    {"budget_exhausted", "driver_stopped", "rejection_limit", "success", "operator_stopped"}
+)
 
 
 class DriverStopped(Exception):
@@ -164,7 +171,18 @@ class Campaign:
         return Ledger.from_events(self.events)
 
     # ------------------------------------------------------------------
-    def run(self, max_queries: int | None = None) -> Outcome:
+    def run(
+        self,
+        max_queries: int | None = None,
+        *,
+        actor: Mapping[str, Any] | None = None,
+        request_id: str | None = None,
+    ) -> Outcome:
+        """Run the loop; every event is attributed to ``actor`` (ADR-0014)."""
+        with self.events.acting_as(actor, request_id):
+            return self._run(max_queries)
+
+    def _run(self, max_queries: int | None) -> Outcome:
         if not self.events.of_kind("campaign_started"):
             self.events.append(
                 "campaign_started",

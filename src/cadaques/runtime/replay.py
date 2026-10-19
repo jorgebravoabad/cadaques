@@ -19,6 +19,7 @@ Two guarantees, both tested in CI:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -85,7 +86,6 @@ def checkpoint(campaign: "Campaign", directory: str | Path) -> Path:
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     campaign.to_spec().dump(directory / "spec.json")
-    campaign.events.to_jsonl(directory / "events.jsonl")
     meta = {
         "schema": CHECKPOINT_SCHEMA,
         "rng": {
@@ -93,8 +93,18 @@ def checkpoint(campaign: "Campaign", directory: str | Path) -> Path:
             "oracle": _rng_state(campaign.oracle),
         },
     }
-    (directory / "checkpoint.json").write_text(json.dumps(meta, indent=2))
+    # rng state first, events last: the event log is the commit point.
+    # A crash in between leaves the record consistent (only the rng
+    # stream advances), never an event the accounting has not seen.
+    _write_atomic(directory / "checkpoint.json", json.dumps(meta, indent=2))
+    campaign.events.to_jsonl(directory / "events.jsonl")
     return directory
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def _result_from_event(event) -> Result:
@@ -107,7 +117,7 @@ def _result_from_event(event) -> Result:
     failure = FailureRecord(
         kind=p.get("failure_kind", "oracle_error"),
         detail=p.get("failure_detail", ""),
-        retryable=False,
+        retryable=bool(p.get("retryable", False)),
         exception=p.get("exception"),
     )
     return Result.failed(query, cost=settled, failure=failure)
@@ -142,6 +152,9 @@ def resume(directory: str | Path) -> "Campaign":
             campaign.budget.charge(result.cost, settle=True)
             campaign.history.append(result)
             campaign.driver.observe(result)
+        elif event.kind == "evaluation_cancelled":
+            # Cancelled work spent money but produced no observation.
+            campaign.budget.charge(Cost.from_dict(event.payload["settled"]), settle=True)
 
     # Restore randomness *after* replaying (observe must not consume rng;
     # states were captured at checkpoint time).

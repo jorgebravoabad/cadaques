@@ -23,6 +23,7 @@ Installation
 
    pip install cadaques          # core: NumPy only
    pip install "cadaques[bo]"    # + the Gaussian-process driver
+   pip install "cadaques[mcp]"   # + the MCP server for agents
 
 .. toctree::
    :maxdepth: 2
@@ -39,6 +40,7 @@ Installation
    api/oracles
    api/drivers
    api/runtime
+   api/agent
    api/stats
    api/verticals
    api/testing
