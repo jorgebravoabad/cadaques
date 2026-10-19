@@ -49,7 +49,7 @@ Citation
 --------
 
 If you use CADAQUES in academic work, please cite it:
-`doi:10.5281/zenodo.21293589 <https://doi.org/10.5281/zenodo.21293589>`_
+`doi:10.5281/zenodo.21293588 <https://doi.org/10.5281/zenodo.21293588>`_
 (concept DOI; per-release DOIs are listed in the
 `CHANGELOG <https://github.com/jorgebravoabad/cadaques/blob/main/CHANGELOG.md>`_)
 and the paper: `arXiv:2607.16127 <https://arxiv.org/abs/2607.16127>`_.
