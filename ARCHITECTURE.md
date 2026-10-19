@@ -47,7 +47,7 @@ Arrows point inward only. Drivers never import oracles; nothing imports plugins.
 The status column is the claim of record: anything marked roadmap is a plan,
 not a capability, and public descriptions must not promote it early.
 
-## The agent surface (unreleased, ADR-0013/0014)
+## The agent surface (shipped in 0.4, ADR-0013/0014)
 
 `cadaques.agent` exposes the kernel to agents as typed tools over
 persistent campaigns. It adds no kernel object: reservations are events,

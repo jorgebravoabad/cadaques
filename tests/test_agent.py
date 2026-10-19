@@ -411,6 +411,17 @@ class TestCommandLine:
 
 
 class TestMCP:
+    def test_missing_extra_gives_an_install_hint(self, tmp_path, monkeypatch):
+        import sys
+
+        from cadaques.agent.mcp_server import MISSING_EXTRA
+
+        for name in ("anyio", "mcp", "mcp.types", "mcp.server", "mcp.server.lowlevel"):
+            monkeypatch.setitem(sys.modules, name, None)  # import now raises ImportError
+        with pytest.raises(SystemExit, match="cadaques\\[mcp\\]"):
+            cli_main(["--root", str(tmp_path), "serve-mcp"])
+        assert "pip install" in MISSING_EXTRA
+
     def test_tools_are_served_over_mcp(self, tmp_path):
         mcp = pytest.importorskip("mcp")
         import anyio

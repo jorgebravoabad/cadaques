@@ -29,15 +29,16 @@ INSTRUCTIONS = (
 )
 
 
+MISSING_EXTRA = "The MCP server needs the optional dependency: pip install 'cadaques[mcp]'"
+
+
 def build_server(toolbox: Toolbox) -> Any:
     try:
         import anyio
         import mcp.types as types
         from mcp.server.lowlevel import Server
-    except ImportError as exc:  # pragma: no cover
-        raise SystemExit(
-            "The MCP server needs the optional dependency: pip install 'cadaques[mcp]'"
-        ) from exc
+    except ImportError as exc:
+        raise SystemExit(MISSING_EXTRA) from exc
 
     tools = [
         types.Tool(
@@ -77,10 +78,10 @@ def build_server(toolbox: Toolbox) -> Any:
 
 
 def serve(toolbox: Toolbox) -> None:  # pragma: no cover — exercised through the stdio client
+    server = build_server(toolbox)  # first: a missing extra gets a clear message
+
     import anyio
     from mcp.server.stdio import stdio_server
-
-    server = build_server(toolbox)
 
     async def main() -> None:
         async with stdio_server() as (read_stream, write_stream):
