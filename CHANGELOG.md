@@ -5,6 +5,8 @@ the pre-1.0 stability policy. The claim of record is the latest tag.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10 — DOI: pending (minted by Zenodo on release)
+
 The agent-first surface: the kernel operated through typed tools by
 agents and people alike, with the asynchronous, agent-operated
 evaluation path the 0.1 paper listed as future work (ADR-0013, ADR-0014).
@@ -41,6 +43,9 @@ evaluation path the 0.1 paper listed as future work (ADR-0013, ADR-0014).
   validates the supplied pool's shape and documents that pool policy
   belongs to `recommend()`. Originates from an external review patch;
   the exclusion was relocated from the driver to the orchestrator.
+- **Studies** (`studies/agent_operation/`): *draft* protocol v2 for the
+  agent-operation experiment (not frozen), with the scheduler shim, a
+  local `fakeslurm`, the grader and the quarter-wave reference check.
 
 ### Changed
 - Events are written as `cadaques.events/2`, with `actor` and
@@ -52,6 +57,13 @@ evaluation path the 0.1 paper listed as future work (ADR-0013, ADR-0014).
 ### Fixed
 - `ARCHITECTURE.md` no longer describes `Resource` as forthcoming
   (shipped in 0.2). (External review.)
+
+### Compatibility
+- No public interface removed; all 0.3, 0.2 and 0.1 imports and
+  constructor calls unchanged; 155 tests.
+- Event logs written by 0.4 use schema `cadaques.events/2` and cannot
+  be read by 0.3 or earlier; 0.4 reads both schemas.
+- The paper reproduction stays pinned at `v0.1.0-paper`.
 
 ## [0.3.0] — 2026-08 — DOI: [10.5281/zenodo.22028069](https://doi.org/10.5281/zenodo.22028069) 
 

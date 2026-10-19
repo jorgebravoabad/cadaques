@@ -1,6 +1,6 @@
 # ADR-0013: The agent surface: typed tools over persistent campaigns
 
-Status: proposed (2026-10)
+Status: accepted (2026-10, shipped in 0.4.0)
 
 ## Context
 Campaigns are increasingly operated by language-model agents that write job scripts, submit them to batch schedulers and decide what to run next. An agent can call a Python API, but it works best through tools with declared schemas, it cannot act on a traceback, it retries calls whose outcome it did not see, and its session often ends before the campaign does. Without a dedicated surface, every agent re-implements the campaign loop and its accounting on the fly, and the invariants of ADR-0006 hold only as well as that improvised code.

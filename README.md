@@ -24,6 +24,7 @@ per unit cost. *Every query counts.*
 ```bash
 pip install cadaques          # core: NumPy only
 pip install "cadaques[bo]"    # + the Gaussian-process driver (scikit-learn)
+pip install "cadaques[mcp]"   # + the MCP server for agents (0.4)
 ```
 
 Or, for development, install the latest version from source:
@@ -157,6 +158,55 @@ the measured *thinking time* — the price of intelligence, attached to the advi
 it produced). A frozen retrospective-benchmark protocol over four public
 datasets lives in `studies/`.
 
+## Campaigns operated by agents (0.4)
+
+A language-model agent can operate a campaign through typed tools instead of
+writing its own loop. The kernel keeps the definitions — what counts as a cost,
+when work may be admitted, what a failed evaluation consumes — and every event
+records who caused it. The same eleven tools are served over MCP and as a JSON
+command line:
+
+```bash
+cadaques-agent --root ws schemas                         # every tool, with its JSON Schema
+cadaques-agent --root ws call describe_capabilities      # drivers, oracles, error codes
+cadaques-agent --root ws serve-mcp                       # requires: pip install "cadaques[mcp]"
+```
+
+For work that runs outside the process — a batch job on a cluster, a
+measurement on an instrument — the agent reserves an evaluation, runs it, and
+settles it with what it really cost:
+
+```python
+from cadaques.agent import Toolbox
+
+tb = Toolbox("ws")
+me = {"kind": "agent", "id": "my-agent", "model": "<model id>"}
+tb.call("create_campaign", {"campaign_id": "pc1d", "actor": me, "request_id": "c1", "spec": {
+    "oracle": {"class": "cadaques.oracles.external.ExternalOracle",       # prices, never runs
+               "params": {"tariff": {"seconds": 30.0}, "scaling": {"resolution": 1.0},
+                          "reference": {"resolution": 16}}},
+    "driver": {"class": "cadaques.drivers.reference.RandomDriver",
+               "params": {"space": {"d_H": [0.05, 0.95]}}},
+    "budget_total": {"seconds": 600.0},
+    "task": {"bounds": {"d_H": [0.05, 0.95]}, "direction": "maximize", "name": "pc1d"},
+    "seed": 0}})
+
+job = tb.call("reserve_evaluation", {"campaign_id": "pc1d", "actor": me, "request_id": "r1",
+                                     "fidelity": {"resolution": 32}})["result"]
+# ... submit the job yourself; when it ends:
+tb.call("settle_evaluation", {"campaign_id": "pc1d", "actor": me, "request_id": "s1",
+                              "evaluation_id": job["evaluation_id"], "outcome": "completed",
+                              "value": 0.71, "settled_cost": {"seconds": 75.0},
+                              "artifacts": ["slurm:123456"]})
+```
+
+Every response is an envelope (`ok`, `result` or a structured `error` with
+`retryable` and `next_actions`). Admission counts outstanding reservations, so
+concurrent operators cannot overspend; failures and cancellations are still
+charged; repeating a call with the same `request_id` returns the original
+response; and campaigns live on disk, so they outlive the session that started
+them. Specs arriving through tools may name only allowlisted participants.
+
 ## Design principles
 
 - **Dual agnosticism.** Oracles and Drivers are `typing.Protocol` classes with
@@ -205,6 +255,12 @@ campaigns over measured tables; the cost-aware `BayesianDriver` (extra
 `cadaques[bo]`); the audited `cadaques.stats` module; recommendation mode
 (`recommend()`, `RankedCandidates`); the chemistry vertical
 (`ReactionTable`); and the frozen study protocol in `studies/`.
+
+*Agent surface (shipped in 0.4).* `cadaques.agent`: eleven typed tools over
+persistent campaigns, structured errors, `request_id` idempotency, actor
+attribution on every event (`cadaques.events/2`), kernel-enforced reservations
+for evaluations run outside the process (`ExternalOracle`, `ExternalDriver`),
+the `cadaques-agent` command line and an MCP server (extra `cadaques[mcp]`).
 
 *Roadmap (not yet shipped).* Asynchronous executors and a Slurm-backed
 workflow resource behind the frozen Resource lifecycle (ADR-0007); a

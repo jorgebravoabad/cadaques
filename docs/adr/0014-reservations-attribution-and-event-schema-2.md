@@ -1,6 +1,6 @@
 # ADR-0014: Reservations, attribution, and event schema 2
 
-Status: proposed (2026-10)
+Status: accepted (2026-10, shipped in 0.4.0)
 
 ## Context
 ADR-0007 keeps the synchronous loop as the reference semantics and admits asynchrony only through an explicit lifecycle. The first asynchronous operator is an agent: it asks what to run, submits a job, and reports back minutes or days later, possibly from another session, possibly with several jobs in flight. The 0.1 paper names what this requires: semantics for reservations, concurrent settlements, cancellation and ordering in the ledger. Independently, a campaign run by several people and agents needs to record who did what.
