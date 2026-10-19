@@ -1,9 +1,12 @@
 """Reference drivers. BayesianDriver requires the [bo] extra and is
 imported lazily so core installs stay light (ADR-0008)."""
 
+from .external import ExternalDriver, ExternalProposal
 from .reference import AnnealedLocalDriver, RandomDriver
 
-__all__ = ["AnnealedLocalDriver", "BayesianDriver", "RandomDriver"]
+__all__ = [
+    "AnnealedLocalDriver", "BayesianDriver", "ExternalDriver", "ExternalProposal", "RandomDriver",
+]
 
 
 def __getattr__(name: str):

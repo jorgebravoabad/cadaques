@@ -32,6 +32,11 @@ class CampaignState:
     declared_oracle: Cost = field(default_factory=Cost)
     settled_oracle: Cost = field(default_factory=Cost)
     stop_reason: str | None = None
+    n_cancelled: int = 0
+    #: Declared cost of reservations not yet settled or cancelled (ADR-0014).
+    reserved: Cost = field(default_factory=Cost)
+    #: Evaluation ids reserved but not yet settled or cancelled, in order.
+    pending: tuple[str, ...] = ()
 
     @property
     def overrun(self) -> Cost:
@@ -51,6 +56,12 @@ def reduce(events: Iterable[Event]) -> CampaignState:
     declared_oracle = Cost()
     settled_oracle = Cost()
     stop_reason: str | None = None
+    n_cancelled = 0
+    open_reservations: dict[str, Cost] = {}
+
+    def _close(evaluation_id: str | None) -> None:
+        if evaluation_id is not None:
+            open_reservations.pop(evaluation_id, None)
 
     for event in events:
         p = event.payload
@@ -62,12 +73,15 @@ def reduce(events: Iterable[Event]) -> CampaignState:
             spent = spent + Cost.from_dict(p["settled"])
         elif event.kind == "rejected":
             n_rejected += 1
+        elif event.kind == "evaluation_reserved":
+            open_reservations[p["evaluation_id"]] = Cost.from_dict(p["declared"])
         elif event.kind == "oracle_result":
             n_queries += 1
             declared_oracle = declared_oracle + Cost.from_dict(p["declared"])
             settled = Cost.from_dict(p["settled"])
             settled_oracle = settled_oracle + settled
             spent = spent + settled
+            _close(p.get("evaluation_id"))
             value = p.get("value")
             if value is not None:
                 better = (
@@ -84,6 +98,14 @@ def reduce(events: Iterable[Event]) -> CampaignState:
             settled = Cost.from_dict(p["settled"])
             settled_oracle = settled_oracle + settled
             spent = spent + settled
+            _close(p.get("evaluation_id"))
+        elif event.kind == "evaluation_cancelled":
+            n_cancelled += 1
+            declared_oracle = declared_oracle + Cost.from_dict(p["declared"])
+            settled = Cost.from_dict(p["settled"])
+            settled_oracle = settled_oracle + settled
+            spent = spent + settled
+            _close(p.get("evaluation_id"))
         elif event.kind == "stopped":
             stop_reason = p.get("reason")
 
@@ -100,4 +122,7 @@ def reduce(events: Iterable[Event]) -> CampaignState:
         declared_oracle=declared_oracle,
         settled_oracle=settled_oracle,
         stop_reason=stop_reason,
+        n_cancelled=n_cancelled,
+        reserved=sum(open_reservations.values(), Cost()),
+        pending=tuple(open_reservations),
     )

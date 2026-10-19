@@ -1,0 +1,11 @@
+# ADR-0014: Reservations, attribution, and event schema 2
+
+Status: proposed (2026-10)
+
+## Context
+ADR-0007 keeps the synchronous loop as the reference semantics and admits asynchrony only through an explicit lifecycle. The first asynchronous operator is an agent: it asks what to run, submits a job, and reports back minutes or days later, possibly from another session, possibly with several jobs in flight. The 0.1 paper names what this requires: semantics for reservations, concurrent settlements, cancellation and ordering in the ledger. Independently, a campaign run by several people and agents needs to record who did what.
+## Decision
+Admission and settlement become separate events. `evaluation_reserved` records an admitted evaluation with its declared cost; admission checks declared cost plus all outstanding reservations against the capped budget, so concurrent operators cannot overspend. Settlement reuses `oracle_result` / `oracle_failure`, with the `evaluation_id`, and is charged unconditionally as in ADR-0006; `evaluation_cancelled` closes a reservation that will not report, still charging its settled cost (the declared cost when none is reported, recorded as `settled_source`). History is ordered by settlement (ordered-complete, ADR-0007). A terminal stop ends admission, never settlement: work already paid for is always accepted. Every event gains `actor` (a person, a service, or an agent identified by model and version) and `request_id` (the call that caused it). These are schema changes, so events are written as `cadaques.events/2`; schema-1 logs load with both fields null, which is all the migration ADR-0005 asks for.
+Rejected alternative: keeping reservations out of the record, in the agent layer's memory. Admission would then depend on state the events cannot reconstruct, violating ADR-0004, and a crash between reservation and settlement would lose the commitment.
+## Consequences
+The derived state gains `reserved`, `pending` and `n_cancelled`; the Ledger gains cancelled transactions. The in-process loop is unchanged and still reproduces bit-for-bit. Settled costs reported by an operator are self-reported, as driver token counts already are; the record keeps them distinguishable from declared defaults, and automatic meters (scheduler accounting) remain future work.

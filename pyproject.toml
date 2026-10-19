@@ -23,7 +23,11 @@ dependencies = ["numpy>=1.24"]
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-cov", "mypy", "ruff"]
 bo = ["scikit-learn>=1.3"]
+mcp = ["mcp>=2.3,<3"]
 docs = ["sphinx>=8", "furo"]
+
+[project.scripts]
+cadaques-agent = "cadaques.agent.cli:main"
 
 [project.urls]
 Repository = "https://github.com/jorgebravoabad/cadaques"

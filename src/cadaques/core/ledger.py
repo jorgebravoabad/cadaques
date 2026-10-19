@@ -79,10 +79,12 @@ class Ledger:
         """Build the accounting view from a campaign event log.
 
         driver_proposal events become ``driver`` transactions;
-        oracle_result / oracle_failure events become ``oracle``
-        transactions (failures keep their settled cost and carry
-        ``value=None``, so cost curves count them and value curves
-        skip them). Other event kinds are lifecycle, not accounting.
+        oracle_result / oracle_failure / evaluation_cancelled events
+        become ``oracle`` transactions (failures and cancellations keep
+        their settled cost and carry ``value=None``, so cost curves
+        count them and value curves skip them). Other event kinds —
+        including reservations, which commit nothing until settled —
+        are lifecycle, not accounting.
         """
         ledger = cls()
         for event in events:
@@ -98,7 +100,7 @@ class Ledger:
                         meta={},
                     )
                 )
-            elif event.kind in ("oracle_result", "oracle_failure"):
+            elif event.kind in ("oracle_result", "oracle_failure", "evaluation_cancelled"):
                 meta = {
                     "value": p.get("value"),
                     "params": p.get("params", {}),
@@ -107,6 +109,10 @@ class Ledger:
                 }
                 if event.kind == "oracle_failure":
                     meta["failure_kind"] = p.get("failure_kind")
+                if event.kind == "evaluation_cancelled":
+                    meta["status"] = "cancelled"
+                if "evaluation_id" in p:
+                    meta["evaluation_id"] = p["evaluation_id"]
                 ledger.transactions.append(
                     Transaction(
                         kind="oracle",
