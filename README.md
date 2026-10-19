@@ -1,6 +1,6 @@
 # CADAQUES
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21293589.svg)](https://doi.org/10.5281/zenodo.21293589)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21293588.svg)](https://doi.org/10.5281/zenodo.21293588)
 [![PyPI](https://img.shields.io/pypi/v/cadaques.svg)](https://pypi.org/project/cadaques/)
 [![CI](https://github.com/jorgebravoabad/cadaques/actions/workflows/ci.yml/badge.svg)](https://github.com/jorgebravoabad/cadaques/actions/workflows/ci.yml)
 
@@ -274,7 +274,7 @@ See `ARCHITECTURE.md` and `docs/adr/` for boundaries and decision gates.
 
 If you use CADAQUES in academic work, please cite it (see `CITATION.cff`).
 Concept DOI (always resolves to the latest version):
-[10.5281/zenodo.21293589](https://doi.org/10.5281/zenodo.21293589).
+[10.5281/zenodo.21293588](https://doi.org/10.5281/zenodo.21293588).
 Version DOIs are listed per release in [`CHANGELOG.md`](CHANGELOG.md).
 Paper: [arXiv:2607.16127](https://arxiv.org/abs/2607.16127).
 

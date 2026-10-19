@@ -2,10 +2,12 @@
 
 All notable changes to CADAQUES. Semantic versioning; see ADR-0010 for
 the pre-1.0 stability policy. The claim of record is the latest tag.
+Concept DOI, resolving to the latest version:
+[10.5281/zenodo.21293588](https://doi.org/10.5281/zenodo.21293588).
 
 ## [Unreleased]
 
-## [0.4.0] — 2026-10 — DOI: pending (minted by Zenodo on release)
+## [0.4.0] — 2026-10 — DOI: [10.5281/zenodo.23474981](https://doi.org/10.5281/zenodo.23474981)
 
 The agent-first surface: the kernel operated through typed tools by
 agents and people alike, with the asynchronous, agent-operated
@@ -166,7 +168,7 @@ compatibility.
   `cadaques.core.campaign`); every 0.1 constructor call is unchanged;
   the 0.1 test suite passes unmodified.
 
-## [0.1.0] — 2026
+## [0.1.0] — 2026 — DOI: [10.5281/zenodo.21293589](https://doi.org/10.5281/zenodo.21293589)
 
 Initial public release: the cost-aware Driver–Oracle architecture.
 Metered `Oracle` and `Driver` protocols; multi-currency `Cost`,
