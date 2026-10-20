@@ -45,11 +45,11 @@ from ..drivers.external import ExternalDriver
 from ..oracles.external import ExternalOracle
 from ..runtime.campaign import TERMINAL_STOP_REASONS, Campaign, DriverStopped
 from ..runtime.replay import CHECKPOINT_SCHEMA
-from ..runtime.state import CampaignState, reduce
+from ..runtime.state import CampaignState
 from . import schema as S
 from .components import ComponentRegistry
 from .errors import ERROR_CODES, ToolError
-from .store import CampaignStore, args_digest
+from .store import CampaignStore, Session, args_digest
 
 STOP_REASONS: tuple[str, ...] = (
     "budget_exhausted", "max_queries", "driver_stopped",
@@ -95,14 +95,32 @@ class _Call:
     toolbox: "Toolbox"
     args: Mapping[str, Any]
     committed: bool = False
+    sessions: dict[str, Session] = field(default_factory=dict)
 
     @property
     def store(self) -> CampaignStore:
         return self.toolbox.store
 
-    def save(self, campaign_id: str, campaign: Campaign) -> None:
-        self.store.save(campaign_id, campaign)
+    def session(self, campaign_id: str, *, view: bool = False) -> Session:
+        """The campaign's session for this call (ADR-0015); a view is read-only."""
+        held = self.sessions.get(campaign_id)
+        if held is None or (not view and not held.full):
+            held = self.sessions[campaign_id] = self.store.session(campaign_id, view=view)
+        return held
+
+    def new_session(self, campaign_id: str, campaign: Campaign) -> Session:
+        session = self.sessions[campaign_id] = self.store.create(campaign_id, campaign)
+        return session
+
+    def save(self, session: Session) -> None:
+        self.store.save(session)
         self.committed = True
+
+    def release(self) -> None:
+        """Return sessions to the store's cache; uncommitted ones are dropped there."""
+        for session in self.sessions.values():
+            self.store.release(session)
+        self.sessions.clear()
 
 
 # ====================================================================== helpers
@@ -137,45 +155,25 @@ def _budget(campaign: Campaign, state: CampaignState) -> dict[str, Any]:
     }
 
 
-def _reservation(campaign: Campaign, evaluation_id: str) -> Event | None:
-    for event in campaign.events.of_kind("evaluation_reserved"):
-        if event.payload["evaluation_id"] == evaluation_id:
-            return event
-    return None
-
-
-def _closing_event(campaign: Campaign, evaluation_id: str) -> Event | None:
-    for event in campaign.events:
-        if (event.kind in ("oracle_result", "oracle_failure", "evaluation_cancelled")
-                and event.payload.get("evaluation_id") == evaluation_id):
-            return event
-    return None
-
-
-def _pending(campaign: Campaign, state: CampaignState) -> list[dict[str, Any]]:
+def _pending(session: Session) -> list[dict[str, Any]]:
     now = time.time()
-    out = []
-    for evaluation_id in state.pending:
-        ev = _reservation(campaign, evaluation_id)
-        assert ev is not None
-        out.append({
-            "evaluation_id": evaluation_id,
-            "params": ev.payload["params"],
-            "fidelity": ev.payload["fidelity"],
-            "declared_cost": ev.payload["declared"],
-            "reserved_at": ev.timestamp,
-            "age_seconds": now - ev.timestamp,
-            "reserved_by": ev.actor,
-        })
-    return out
+    return [{
+        "evaluation_id": ev.payload["evaluation_id"],
+        "params": ev.payload["params"],
+        "fidelity": ev.payload["fidelity"],
+        "declared_cost": ev.payload["declared"],
+        "reserved_at": ev.timestamp,
+        "age_seconds": now - ev.timestamp,
+        "reserved_by": ev.actor,
+    } for ev in session.pending()]
 
 
 def _accepting(state: CampaignState) -> bool:
     return state.stop_reason not in TERMINAL_STOP_REASONS
 
 
-def _status(campaign_id: str, campaign: Campaign) -> dict[str, Any]:
-    state = reduce(campaign.events)
+def _status(campaign_id: str, session: Session) -> dict[str, Any]:
+    campaign, state = session.campaign, session.state()
     return {
         "campaign_id": campaign_id,
         "oracle": type(campaign.oracle).__name__,
@@ -190,12 +188,12 @@ def _status(campaign_id: str, campaign: Campaign) -> dict[str, Any]:
         "n_failures": state.n_failures,
         "n_rejected": state.n_rejected,
         "n_cancelled": state.n_cancelled,
-        "n_events": len(campaign.events),
+        "n_events": session.n_events,
         "best": ({"value": state.best_value, "params": dict(state.best_params)}
                  if state.best_value is not None else None),
         "budget": _budget(campaign, state),
         "overrun": state.overrun.as_dict(),
-        "pending": _pending(campaign, state),
+        "pending": _pending(session),
     }
 
 
@@ -298,6 +296,7 @@ def _create_campaign(call: _Call) -> tuple[dict[str, Any], list[str]]:
     campaign = _build(spec)
     spec_sha = hashlib.sha256(spec.dumps().encode("utf-8")).hexdigest()
     call.store.path(cid).mkdir(parents=True, exist_ok=True)
+    session = call.new_session(cid, campaign)
     with campaign.events.acting_as(a["actor"], a["request_id"]):
         campaign.events.append(
             "campaign_started",
@@ -312,8 +311,8 @@ def _create_campaign(call: _Call) -> tuple[dict[str, Any], list[str]]:
             spec_sha256=spec_sha,
             note=a.get("note", ""),
         )
-    call.save(cid, campaign)
-    status = _status(cid, campaign)
+    call.save(session)
+    status = _status(cid, session)
     return {"created": True, "spec_sha256": spec_sha, "status": status}, _status_next(status)
 
 
@@ -321,11 +320,11 @@ def _list_campaigns(call: _Call) -> tuple[dict[str, Any], list[str]]:
     items = []
     for cid in call.store.campaign_ids():
         try:
-            campaign = call.store.load(cid)
+            session = call.session(cid, view=True)
         except Exception as exc:  # noqa: BLE001 — one broken directory must not hide the rest
             items.append({"campaign_id": cid, "readable": False, "reason": str(exc)})
             continue
-        state = reduce(campaign.events)
+        campaign, state = session.campaign, session.state()
         items.append({
             "campaign_id": cid, "readable": True,
             "oracle": type(campaign.oracle).__name__, "driver": type(campaign.driver).__name__,
@@ -338,30 +337,38 @@ def _list_campaigns(call: _Call) -> tuple[dict[str, Any], list[str]]:
 
 def _get_campaign_status(call: _Call) -> tuple[dict[str, Any], list[str]]:
     cid = call.args["campaign_id"]
-    status = _status(cid, call.store.load(cid))
+    status = _status(cid, call.session(cid, view=True))
     return status, _status_next(status)
 
 
 def _get_events(call: _Call) -> tuple[dict[str, Any], list[str]]:
     a = call.args
-    campaign = call.store.load(a["campaign_id"])
+    session = call.session(a["campaign_id"])
+    log = session.campaign.events.events
     since, limit = a.get("since_seq", 0), a.get("limit", 200)
     kinds = set(a.get("kinds", EVENT_KINDS))
-    selected = [e for e in campaign.events if e.seq >= since and e.kind in kinds]
-    page = selected[:limit]
-    next_seq = page[-1].seq + 1 if len(selected) > limit else None
+    page: list[Event] = []
+    more = False
+    for event in log[since:]:  # seq is the position in the log
+        if event.kind not in kinds:
+            continue
+        if len(page) == limit:
+            more = True
+            break
+        page.append(event)
+    next_seq = page[-1].seq + 1 if more else None
     return {
         "events": [e.as_dict() for e in page],
         "next_seq": next_seq,
-        "total_events": len(campaign.events),
+        "total_events": len(log),
     }, (["get_events"] if next_seq is not None else ["get_campaign_status"])
 
 
 def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
     a = call.args
     cid = a["campaign_id"]
-    campaign = call.store.load(cid)
-    state = reduce(campaign.events)
+    session = call.session(cid)
+    campaign, state = session.campaign, session.state()
     _ensure_accepting(state)
     decision_cost = _cost(a.get("decision_cost"))
     fidelity_override = dict(a.get("fidelity", {}))
@@ -379,7 +386,7 @@ def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
                     details={"driver": "ExternalDriver"},
                     next_actions=["reserve_evaluation"],
                 )
-            query = _driver_proposal(call, cid, campaign, decision_cost, fidelity_override)
+            query = _driver_proposal(call, session, decision_cost, fidelity_override)
         else:
             query = Query(params=dict(operator_params), fidelity=fidelity_override,
                           tag=a.get("tag", ""))
@@ -392,7 +399,7 @@ def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
             if campaign.task is not None and not campaign.task.admits(query):
                 campaign.events.append("rejected", label="operator", params=dict(query.params),
                                        fidelity=dict(query.fidelity), reason="task_validation")
-                call.save(cid, campaign)
+                call.save(session)
                 raise ToolError(
                     "invalid_query",
                     "The point is outside the task's search space or violates a constraint.",
@@ -407,7 +414,7 @@ def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
                 campaign.events.append("stopped", reason="budget_exhausted",
                                        n_queries=len(campaign.history),
                                        spent=campaign.budget.spent.as_dict())
-            call.save(cid, campaign)
+            call.save(session)
             raise ToolError(
                 "budget_exhausted",
                 "The declared cost of this evaluation does not fit in the budget left after "
@@ -427,8 +434,8 @@ def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
             label=type(campaign.oracle).__name__, declared=declared.as_dict(),
             params=dict(query.params), fidelity=dict(query.fidelity), tag=query.tag,
         )
-    call.save(cid, campaign)
-    state = reduce(campaign.events)
+    call.save(session)
+    state = session.state()
     return {
         "campaign_id": cid,
         "evaluation_id": evaluation_id,
@@ -440,9 +447,10 @@ def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
     }, ["settle_evaluation", "cancel_evaluation"]
 
 
-def _driver_proposal(call: _Call, cid: str, campaign: Campaign, decision_cost: Cost,
+def _driver_proposal(call: _Call, session: Session, decision_cost: Cost,
                      fidelity_override: Mapping[str, Any]) -> Query:
     """Ask the in-kernel driver, as the sync loop does: metered, validated."""
+    campaign = session.campaign
     rejections = 0
     while True:
         t0 = time.perf_counter()
@@ -452,7 +460,7 @@ def _driver_proposal(call: _Call, cid: str, campaign: Campaign, decision_cost: C
             campaign.events.append("stopped", reason="driver_stopped",
                                    n_queries=len(campaign.history),
                                    spent=campaign.budget.spent.as_dict())
-            call.save(cid, campaign)
+            call.save(session)
             raise ToolError("campaign_stopped", "The driver ended the campaign.",
                             details={"stop_reason": "driver_stopped"}) from None
         elapsed = time.perf_counter() - t0
@@ -480,18 +488,18 @@ def _driver_proposal(call: _Call, cid: str, campaign: Campaign, decision_cost: C
             campaign.events.append("stopped", reason="rejection_limit",
                                    n_queries=len(campaign.history),
                                    spent=campaign.budget.spent.as_dict())
-            call.save(cid, campaign)
+            call.save(session)
             raise ToolError("campaign_stopped",
                             "The driver kept proposing points outside the task.",
                             details={"stop_reason": "rejection_limit"})
 
 
-def _open_reservation(campaign: Campaign, evaluation_id: str) -> Event:
-    reservation = _reservation(campaign, evaluation_id)
+def _open_reservation(session: Session, evaluation_id: str) -> Event:
+    reservation = session.reservation(evaluation_id)
     if reservation is None:
         raise ToolError("unknown_evaluation", f"No reservation {evaluation_id!r} in this campaign.",
                         details={"evaluation_id": evaluation_id})
-    closing = _closing_event(campaign, evaluation_id)
+    closing = session.closing(evaluation_id)
     if closing is not None:
         raise ToolError(
             "already_settled",
@@ -506,8 +514,9 @@ def _open_reservation(campaign: Campaign, evaluation_id: str) -> Event:
 def _settle_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
     a = call.args
     cid, evaluation_id = a["campaign_id"], a["evaluation_id"]
-    campaign = call.store.load(cid)
-    reservation = _open_reservation(campaign, evaluation_id)
+    session = call.session(cid)
+    campaign = session.campaign
+    reservation = _open_reservation(session, evaluation_id)
     rp = reservation.payload
     declared = Cost.from_dict(rp["declared"])
     if "settled_cost" in a:
@@ -538,13 +547,13 @@ def _settle_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
                 retryable=bool(failure.get("retryable", False)),
                 exception=None, **common,
             )
-        state = reduce(campaign.events)
+        state = session.state()
         if (outcome == "completed" and campaign.task is not None
                 and campaign.task.succeeded(value) and _accepting(state)):
             campaign.events.append("stopped", reason="success", n_queries=state.n_queries,
                                    spent=campaign.budget.spent.as_dict())
-    call.save(cid, campaign)
-    status = _status(cid, campaign)
+    call.save(session)
+    status = _status(cid, session)
     return {
         "evaluation_id": evaluation_id,
         "outcome": outcome,
@@ -559,8 +568,9 @@ def _settle_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
 def _cancel_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
     a = call.args
     cid, evaluation_id = a["campaign_id"], a["evaluation_id"]
-    campaign = call.store.load(cid)
-    reservation = _open_reservation(campaign, evaluation_id)
+    session = call.session(cid)
+    campaign = session.campaign
+    reservation = _open_reservation(session, evaluation_id)
     rp = reservation.payload
     declared = Cost.from_dict(rp["declared"])
     if "settled_cost" in a:
@@ -574,8 +584,8 @@ def _cancel_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
             declared=declared.as_dict(), settled=settled.as_dict(), settled_source=source,
             params=rp["params"], fidelity=rp["fidelity"], reason=a.get("reason", ""),
         )
-    call.save(cid, campaign)
-    status = _status(cid, campaign)
+    call.save(session)
+    status = _status(cid, session)
     return {"evaluation_id": evaluation_id, "cancelled": True,
             "settled_cost": settled.as_dict(), "settled_source": source,
             "status": status}, _status_next(status)
@@ -584,8 +594,8 @@ def _cancel_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
 def _run_campaign(call: _Call) -> tuple[dict[str, Any], list[str]]:
     a = call.args
     cid = a["campaign_id"]
-    campaign = call.store.load(cid)
-    state = reduce(campaign.events)
+    session = call.session(cid)
+    campaign, state = session.campaign, session.state()
     if isinstance(campaign.oracle, ExternalOracle) or isinstance(campaign.driver, ExternalDriver):
         raise ToolError(
             "unsupported_operation",
@@ -603,8 +613,8 @@ def _run_campaign(call: _Call) -> tuple[dict[str, Any], list[str]]:
     before = len(campaign.history)
     outcome = campaign.run(max_queries=before + a["max_new_queries"],
                            actor=a["actor"], request_id=a["request_id"])
-    call.save(cid, campaign)
-    status = _status(cid, campaign)
+    call.save(session)
+    status = _status(cid, session)
     return {"stop_reason": outcome.stop_reason, "n_new_queries": len(campaign.history) - before,
             "status": status}, _status_next(status)
 
@@ -612,15 +622,15 @@ def _run_campaign(call: _Call) -> tuple[dict[str, Any], list[str]]:
 def _stop_campaign(call: _Call) -> tuple[dict[str, Any], list[str]]:
     a = call.args
     cid = a["campaign_id"]
-    campaign = call.store.load(cid)
-    state = reduce(campaign.events)
+    session = call.session(cid)
+    campaign, state = session.campaign, session.state()
     already = not _accepting(state)
     if not already:
         with campaign.events.acting_as(a["actor"], a["request_id"]):
             campaign.events.append("stopped", reason="operator_stopped", note=a.get("reason", ""),
                                    n_queries=state.n_queries, spent=campaign.budget.spent.as_dict())
-        call.save(cid, campaign)
-    status = _status(cid, campaign)
+        call.save(session)
+    status = _status(cid, session)
     return {"stopped": True, "already_stopped": already, "status": status}, _status_next(status)
 
 
@@ -798,7 +808,11 @@ class Toolbox:
                                 "An agent actor must state its model (and preferably version).",
                                 details={"actor": actor}, next_actions=[name])
             if tool.read_only:
-                result, next_actions = tool.handler(_Call(self, args))
+                call = _Call(self, args)
+                try:
+                    result, next_actions = tool.handler(call)
+                finally:
+                    call.release()
                 return self._ok(name, result, next_actions)
             return self._mutate(tool, args)
         except ToolError as err:
@@ -811,43 +825,47 @@ class Toolbox:
     def _mutate(self, tool: Tool, args: Mapping[str, Any]) -> dict[str, Any]:
         cid, request_id = args["campaign_id"], args["request_id"]
         digest = args_digest(tool.name, args)
-        with self.store.lock(cid):
-            prior = self.store.journal_lookup(cid, request_id)
-            if prior is not None:
-                if prior["args_sha256"] != digest:
-                    raise ToolError(
-                        "idempotency_conflict",
-                        f"request_id {request_id!r} was already used for a different call.",
-                        details={"request_id": request_id, "previous_tool": prior["tool"]})
-                return {**prior["response"], "replayed": True}
-            if self.store.exists(cid):
-                committed = self.store.load(cid).events.by_request(request_id)
-                if committed:
-                    return self._reconstructed(tool.name, cid, request_id, committed)
-            call = _Call(self, args)
-            try:
-                result, next_actions = tool.handler(call)
-                response = self._ok(tool.name, result, next_actions)
-            except ToolError as err:
-                response = self._err(tool.name, err)
-            if call.committed:
-                self.store.journal_append(cid, request_id, tool.name, digest, response)
-            return response
+        call = _Call(self, args)
+        try:
+            with self.store.lock(cid):
+                prior = self.store.journal_lookup(cid, request_id)
+                if prior is not None:
+                    if prior["args_sha256"] != digest:
+                        raise ToolError(
+                            "idempotency_conflict",
+                            f"request_id {request_id!r} was already used for a different call.",
+                            details={"request_id": request_id, "previous_tool": prior["tool"]})
+                    return {**prior["response"], "replayed": True}
+                if self.store.exists(cid):
+                    session = call.session(cid)
+                    committed = session.events_for(request_id)
+                    if committed:
+                        return self._reconstructed(tool.name, cid, session, committed)
+                try:
+                    result, next_actions = tool.handler(call)
+                    response = self._ok(tool.name, result, next_actions)
+                except ToolError as err:
+                    response = self._err(tool.name, err)
+                if call.committed:
+                    self.store.journal_append(cid, request_id, tool.name, digest, response)
+                return response
+        finally:
+            call.release()
 
-    def _reconstructed(self, name: str, cid: str, request_id: str,
+    def _reconstructed(self, name: str, cid: str, session: Session,
                        events: list[Event]) -> dict[str, Any]:
         """The call committed but its response was never journaled (crash window)."""
-        campaign = self.store.load(cid)
+        campaign = session.campaign
         reserved = [e for e in events if e.kind == "evaluation_reserved"]
         if name == "reserve_evaluation" and reserved:
             p = reserved[-1].payload
-            state = reduce(campaign.events)
+            state = session.state()
             result = {"campaign_id": cid, "evaluation_id": p["evaluation_id"],
                       "params": p["params"], "fidelity": p["fidelity"], "tag": p.get("tag", ""),
                       "declared_cost": p["declared"], "budget": _budget(campaign, state)}
             return {**self._ok(name, result, ["settle_evaluation", "cancel_evaluation"]),
                     "replayed": True, "reconstructed": True}
-        status = _status(cid, campaign)
+        status = _status(cid, session)
         result = {"committed_events": [e.as_dict() for e in events], "status": status}
         return {**self._ok(name, result, _status_next(status)),
                 "replayed": True, "reconstructed": True}

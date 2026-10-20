@@ -7,6 +7,15 @@ Concept DOI, resolving to the latest version:
 
 ## [Unreleased]
 
+### Changed
+- **Tool-call latency no longer grows with the log** (ADR-0015). Mutating
+  calls commit by appending new events instead of rewriting the log, tool
+  calls reuse a validated, incrementally folded session, and a
+  `snapshot.json` (a cache, validated against the log and ignored on any
+  mismatch) serves cold status and listing calls. `EventLog.from_jsonl`
+  now ignores an unterminated, unparsable final line (a torn append).
+  New internals: `StateFold`, `read_events_from`, `replay.restore`.
+
 ## [0.4.0] — 2026-10 — DOI: [10.5281/zenodo.23474981](https://doi.org/10.5281/zenodo.23474981)
 
 The agent-first surface: the kernel operated through typed tools by

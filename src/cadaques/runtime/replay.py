@@ -86,6 +86,13 @@ def checkpoint(campaign: "Campaign", directory: str | Path) -> Path:
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     campaign.to_spec().dump(directory / "spec.json")
+    write_rng_state(campaign, directory)
+    campaign.events.to_jsonl(directory / "events.jsonl")
+    return directory
+
+
+def write_rng_state(campaign: "Campaign", directory: Path) -> None:
+    """Atomically write ``checkpoint.json``: the participants' rng states."""
     meta = {
         "schema": CHECKPOINT_SCHEMA,
         "rng": {
@@ -97,8 +104,6 @@ def checkpoint(campaign: "Campaign", directory: str | Path) -> Path:
     # A crash in between leaves the record consistent (only the rng
     # stream advances), never an event the accounting has not seen.
     _write_atomic(directory / "checkpoint.json", json.dumps(meta, indent=2))
-    campaign.events.to_jsonl(directory / "events.jsonl")
-    return directory
 
 
 def _write_atomic(path: Path, text: str) -> None:
@@ -123,6 +128,50 @@ def _result_from_event(event) -> Result:
     return Result.failed(query, cost=settled, failure=failure)
 
 
+def apply_event(campaign: "Campaign", event) -> None:
+    """Bring a campaign's accounting and driver knowledge forward by one recorded event.
+
+    The event itself is not appended: the caller owns ``campaign.events``.
+    """
+    if event.kind == "driver_proposal":
+        campaign.budget.charge(Cost.from_dict(event.payload["settled"]), settle=True)
+    elif event.kind in ("oracle_result", "oracle_failure"):
+        result = _result_from_event(event)
+        campaign.budget.charge(result.cost, settle=True)
+        campaign.history.append(result)
+        campaign.driver.observe(result)
+    elif event.kind == "evaluation_cancelled":
+        # Cancelled work spent money but produced no observation.
+        campaign.budget.charge(Cost.from_dict(event.payload["settled"]), settle=True)
+
+
+def restore_rng(campaign: "Campaign", directory: str | Path) -> None:
+    """Restore participant randomness from ``checkpoint.json``.
+
+    Done *after* history is replayed (observe must not consume rng; states
+    were captured at checkpoint time).
+    """
+    meta = json.loads((Path(directory) / "checkpoint.json").read_text())
+    if meta.get("schema") != CHECKPOINT_SCHEMA:
+        raise SpecError(f"Unsupported checkpoint schema {meta.get('schema')!r}")
+    _restore_rng(campaign.driver, meta["rng"].get("driver"))
+    _restore_rng(campaign.oracle, meta["rng"].get("oracle"))
+
+
+def restore(directory: str | Path, events: EventLog) -> "Campaign":
+    """Rebuild a campaign from its spec, the given record and the checkpointed rng."""
+    from .campaign import Campaign
+
+    directory = Path(directory)
+    spec = CampaignSpec.load(directory / "spec.json")
+    campaign = Campaign.from_spec(spec)
+    campaign.events = events
+    for event in events:
+        apply_event(campaign, event)
+    restore_rng(campaign, directory)
+    return campaign
+
+
 def resume(directory: str | Path) -> "Campaign":
     """Rebuild a checkpointed campaign, primed to continue.
 
@@ -132,32 +181,4 @@ def resume(directory: str | Path) -> "Campaign":
     an uninterrupted one obey the same contract.
     """
     directory = Path(directory)
-    meta = json.loads((directory / "checkpoint.json").read_text())
-    if meta.get("schema") != CHECKPOINT_SCHEMA:
-        raise SpecError(f"Unsupported checkpoint schema {meta.get('schema')!r}")
-
-    from .campaign import Campaign
-
-    spec = CampaignSpec.load(directory / "spec.json")
-    campaign = Campaign.from_spec(spec)
-    events = EventLog.from_jsonl(directory / "events.jsonl")
-
-    # Restore record and accounting from events (source of truth).
-    campaign.events = events
-    for event in events:
-        if event.kind == "driver_proposal":
-            campaign.budget.charge(Cost.from_dict(event.payload["settled"]), settle=True)
-        elif event.kind in ("oracle_result", "oracle_failure"):
-            result = _result_from_event(event)
-            campaign.budget.charge(result.cost, settle=True)
-            campaign.history.append(result)
-            campaign.driver.observe(result)
-        elif event.kind == "evaluation_cancelled":
-            # Cancelled work spent money but produced no observation.
-            campaign.budget.charge(Cost.from_dict(event.payload["settled"]), settle=True)
-
-    # Restore randomness *after* replaying (observe must not consume rng;
-    # states were captured at checkpoint time).
-    _restore_rng(campaign.driver, meta["rng"].get("driver"))
-    _restore_rng(campaign.oracle, meta["rng"].get("oracle"))
-    return campaign
+    return restore(directory, EventLog.from_jsonl(directory / "events.jsonl"))

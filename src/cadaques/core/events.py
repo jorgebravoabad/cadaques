@@ -128,32 +128,66 @@ class EventLog:
 
     @classmethod
     def from_jsonl(cls, path: str | Path) -> "EventLog":
-        log = cls()
-        with Path(path).open("r", encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                raw = json.loads(line)
-                schema = raw.get("schema")
-                if schema not in READABLE_EVENT_SCHEMAS:
-                    raise ValueError(
-                        f"Unsupported event schema {schema!r} "
-                        f"(readable: {', '.join(READABLE_EVENT_SCHEMAS)})"
-                    )
-                log.events.append(
-                    Event(
-                        seq=int(raw["seq"]),
-                        kind=str(raw["kind"]),
-                        payload=dict(raw["payload"]),
-                        timestamp=float(raw["timestamp"]),
-                        actor=raw.get("actor"),
-                        request_id=raw.get("request_id"),
-                    )
-                )
-        for expected, event in enumerate(log.events):
-            if event.seq != expected:
+        """Read a log; an unterminated, unparsable final line (a torn append) is ignored."""
+        events, _, _ = read_events_from(path, 0)
+        return cls(events=events)
+
+
+def event_line(event: Event) -> bytes:
+    """The serialized form of one event: a JSON line, newline included."""
+    return (json.dumps(event.as_dict()) + "\n").encode("utf-8")
+
+
+def event_from_dict(raw: Mapping[str, Any]) -> Event:
+    """Inverse of :meth:`Event.as_dict`; rejects unreadable schemas."""
+    schema = raw.get("schema")
+    if schema not in READABLE_EVENT_SCHEMAS:
+        raise ValueError(
+            f"Unsupported event schema {schema!r} (readable: {', '.join(READABLE_EVENT_SCHEMAS)})"
+        )
+    return Event(
+        seq=int(raw["seq"]),
+        kind=str(raw["kind"]),
+        payload=dict(raw["payload"]),
+        timestamp=float(raw["timestamp"]),
+        actor=raw.get("actor"),
+        request_id=raw.get("request_id"),
+    )
+
+
+def read_events_from(
+    path: str | Path, offset: int = 0, expected_seq: int = 0
+) -> tuple[list[Event], int, bytes]:
+    """Read the events stored at and after byte ``offset`` of a JSONL log.
+
+    Returns ``(events, end_offset, last_line)`` where ``end_offset`` is the byte
+    position just past the last event read (``offset`` if there is none) and
+    ``last_line`` the raw bytes of that event (``b""`` if none). A log is a
+    sequence of newline-terminated lines; an unterminated final fragment that
+    does not parse is a torn append and is left unread, so ``end_offset`` is
+    always a commit boundary. Sequence numbers must run on from ``expected_seq``.
+    """
+    with Path(path).open("rb") as fh:
+        fh.seek(offset)
+        data = fh.read()
+    events: list[Event] = []
+    pos, last = 0, b""
+    while pos < len(data):
+        nl = data.find(b"\n", pos)
+        end = nl + 1 if nl != -1 else len(data)
+        line = data[pos:end]
+        if line.strip():
+            try:
+                event = event_from_dict(json.loads(line))
+            except (ValueError, KeyError, TypeError):
+                if nl == -1:
+                    break  # torn append: not committed, left unread
+                raise
+            if event.seq != expected_seq + len(events):
                 raise ValueError(
-                    f"Event log corrupt: seq {event.seq} at position {expected}"
+                    f"Event log corrupt: seq {event.seq} at position {expected_seq + len(events)}"
                 )
-        return log
+            events.append(event)
+            last = line
+        pos = end
+    return events, offset + pos, last
