@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cadaques import (
     Budget, Campaign, CampaignSpec, Cost, Task, checkpoint, replay, resume,
 )
@@ -125,3 +127,28 @@ class TestResume:
         revived = resume(tmp_path / "ckpt")
         assert revived.budget.spent == spent_before
         assert revived.history and len(revived.history) == 3
+
+    def test_checkpoint_rewrites_spec_atomically(self, tmp_path, monkeypatch):
+        """A crash while re-checkpointing must leave the previous spec.json readable."""
+        import os
+
+        from cadaques import CampaignSpec
+
+        c = make_campaign(seed=5)
+        c.run(max_queries=2)
+        checkpoint(c, tmp_path / "ckpt")
+        before = (tmp_path / "ckpt" / "spec.json").read_bytes()
+
+        real = os.replace
+
+        def die(src, dst, *a, **k):
+            if os.path.basename(dst) == "spec.json":
+                raise KeyboardInterrupt  # the process dies mid-write of the spec
+            return real(src, dst, *a, **k)
+
+        monkeypatch.setattr(os, "replace", die)
+        with pytest.raises(KeyboardInterrupt):
+            checkpoint(c, tmp_path / "ckpt")
+        monkeypatch.undo()
+        assert (tmp_path / "ckpt" / "spec.json").read_bytes() == before
+        CampaignSpec.load(tmp_path / "ckpt" / "spec.json")

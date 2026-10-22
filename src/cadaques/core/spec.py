@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
 from .cost import Budget, Cost
+from .fsio import write_atomic
 from .task import SearchSpace, Task
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -133,9 +134,8 @@ class CampaignSpec:
         return cls(**raw)
 
     def dump(self, path: str | Path) -> Path:
-        path = Path(path)
-        path.write_text(self.dumps(), encoding="utf-8")
-        return path
+        """Write the spec atomically: a crash leaves the old file or the new one."""
+        return write_atomic(path, self.dumps())
 
     @classmethod
     def load(cls, path: str | Path) -> "CampaignSpec":

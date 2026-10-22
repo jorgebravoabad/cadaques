@@ -19,7 +19,6 @@ Two guarantees, both tested in CI:
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +26,7 @@ import numpy as np
 
 from ..core.cost import Cost
 from ..core.events import EventLog
+from ..core.fsio import write_atomic
 from ..core.observation import FailureRecord
 from ..core.records import Query, Result
 from ..core.spec import CampaignSpec, SpecError
@@ -107,9 +107,7 @@ def write_rng_state(campaign: "Campaign", directory: Path) -> None:
 
 
 def _write_atomic(path: Path, text: str) -> None:
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    write_atomic(path, text)
 
 
 def _result_from_event(event) -> Result:

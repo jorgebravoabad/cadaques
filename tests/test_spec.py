@@ -30,6 +30,33 @@ class TestRoundTrip:
         p = spec.dump(tmp_path / "campaign.spec.json")
         assert CampaignSpec.load(p) == spec
 
+    def test_dump_is_atomic_a_crash_leaves_the_old_spec(self, tmp_path, monkeypatch):
+        """0.4.0 truncated spec.json before rewriting it; a kill left a 0-byte file."""
+        import os
+
+        old = small_ising_campaign().to_spec()
+        new = small_ising_campaign().to_spec(max_queries=3)
+        path = old.dump(tmp_path / "spec.json")
+
+        def die(src, dst, *a, **k):
+            raise KeyboardInterrupt  # stand-in for the process dying before the rename
+
+        monkeypatch.setattr(os, "replace", die)
+        with pytest.raises(KeyboardInterrupt):
+            new.dump(path)
+        monkeypatch.undo()
+        assert CampaignSpec.load(path) == old
+
+    def test_dump_of_a_new_file_never_leaves_an_empty_spec(self, tmp_path, monkeypatch):
+        import os
+
+        monkeypatch.setattr(os, "replace", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt))
+        path = tmp_path / "spec.json"
+        with pytest.raises(KeyboardInterrupt):
+            small_ising_campaign().to_spec().dump(path)
+        monkeypatch.undo()
+        assert not path.exists()
+
     def test_rebuilt_campaign_reproduces_values(self):
         c1 = small_ising_campaign()
         spec = c1.to_spec()
