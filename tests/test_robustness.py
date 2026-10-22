@@ -155,3 +155,62 @@ class TestReadersNeverSeeTornFiles:
         [t.start() for t in threads]
         [t.join() for t in threads]
         assert reads[0] > 20 and not bad, bad[:2]
+
+
+class TestTornJournalTail:
+    """A crash mid-append left half a line in requests.jsonl; every later call then raised."""
+
+    def _campaign(self, tmp_path):
+        tb = Toolbox(tmp_path / "ws")
+        assert call(tb, "create_campaign", "mk", spec=spec(seconds=100.0))["ok"]
+        first = call(tb, "reserve_evaluation", "r1", params={"x": 0.5})
+        assert first["ok"]
+        return first, tmp_path / "ws" / "c" / "requests.jsonl"
+
+    def _tear(self, journal, keep=0.5):
+        lines = journal.read_bytes().splitlines(keepends=True)
+        last = lines[-1]
+        journal.write_bytes(b"".join(lines[:-1]) + last[: int(len(last) * keep)])
+
+    def test_later_calls_survive_a_truncated_final_line(self, tmp_path):
+        first, journal = self._campaign(tmp_path)
+        second = call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r2", params={"x": 0.6})
+        assert second["ok"]
+        self._tear(journal)  # the entry of r2 is cut in half
+        fresh = Toolbox(tmp_path / "ws")
+        third = call(fresh, "reserve_evaluation", "r3", params={"x": 0.7})
+        assert third["ok"], third
+        again = call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r1", params={"x": 0.5})
+        assert again["replayed"] and again["result"]["evaluation_id"] == first["result"]["evaluation_id"]
+        assert journal.read_bytes().endswith(b"\n")
+        for line in journal.read_bytes().splitlines():
+            json.loads(line)  # the torn fragment is gone, not glued into a garbage line
+
+    def test_the_retry_of_the_torn_request_is_reconstructed_from_the_events(self, tmp_path):
+        _, journal = self._campaign(tmp_path)
+        second = call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r2", params={"x": 0.6})
+        self._tear(journal)
+        retry = call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r2", params={"x": 0.6})
+        assert retry["ok"] and retry["reconstructed"]
+        assert retry["result"]["evaluation_id"] == second["result"]["evaluation_id"]
+        assert call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r4", params={"x": 0.1})["ok"]
+
+    def test_a_garbage_line_written_by_an_older_release_is_ignored(self, tmp_path):
+        """0.4.0 glued the next entry after the torn fragment with a newline."""
+        first, journal = self._campaign(tmp_path)
+        with journal.open("ab") as fh:
+            fh.write(b'{"schema": "cadaques.requests/1", "request_id": "ghost", "tool": "rese\n')
+        tb = Toolbox(tmp_path / "ws")
+        assert call(tb, "reserve_evaluation", "r2", params={"x": 0.6})["ok"]
+        assert call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r1", params={"x": 0.5})["replayed"]
+        assert call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r2", params={"x": 0.6})["replayed"]
+        assert call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r5", params={"x": 0.2})["ok"]
+        # the id of the damaged line is simply unknown: the call is executed, not an error
+        assert call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "ghost", params={"x": 0.3})["ok"]
+
+    def test_an_entry_that_only_lacks_its_newline_is_kept(self, tmp_path):
+        first, journal = self._campaign(tmp_path)
+        journal.write_bytes(journal.read_bytes().rstrip(b"\n"))
+        assert call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r2", params={"x": 0.6})["ok"]
+        again = call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r1", params={"x": 0.5})
+        assert again["replayed"] and not again.get("reconstructed")

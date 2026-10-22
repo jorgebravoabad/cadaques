@@ -69,6 +69,22 @@ READ_RETRIES: int = 4
 _REQUEST_ID = re.compile(rb'^\{"schema": "[^"]*", "request_id": ("(?:[^"\\]|\\.)*")')
 
 
+def _journal_request_id(line: bytes) -> str | None:
+    """The request_id of a journal line, or None if the line is not an entry.
+
+    The id is read with a prefix pattern, not a full parse, to keep the index
+    cheap; a line that does not look like a complete entry (it must end in
+    ``}``) is a torn append that a later writer terminated, and is skipped.
+    """
+    if not line.rstrip().endswith(b"}"):
+        return None
+    try:
+        m = _REQUEST_ID.match(line)
+        return json.loads(m.group(1)) if m else json.loads(line).get("request_id")
+    except (ValueError, AttributeError):
+        return None
+
+
 def args_digest(tool: str, args: Mapping[str, Any]) -> str:
     """Canonical hash of a tool call, for idempotency checks."""
     canonical = json.dumps({"tool": tool, "args": args}, sort_keys=True, separators=(",", ":"))
@@ -462,14 +478,13 @@ class CampaignStore:
             while pos < len(data):
                 nl = data.find(b"\n", pos)
                 if nl == -1:
-                    break  # torn append
+                    break  # torn append: not an entry; journal_append repairs it
                 line = data[pos:nl + 1]
                 if line.strip():
-                    m = _REQUEST_ID.match(line)
-                    request_id = (json.loads(m.group(1)) if m
-                                  else json.loads(line).get("request_id"))
-                    index.spans.setdefault(request_id, (index.offset + pos, index.offset + nl + 1))
-                    index.last = line
+                    request_id = _journal_request_id(line)
+                    if request_id is not None:  # else: a torn line that a newline later closed
+                        index.spans.setdefault(request_id, (index.offset + pos, index.offset + nl + 1))
+                index.last = line
                 pos = nl + 1
             index.offset += pos
         return index
@@ -483,7 +498,11 @@ class CampaignStore:
             return None
         with path.open("rb") as fh:
             fh.seek(span[0])
-            return json.loads(fh.read(span[1] - span[0]))
+            raw = fh.read(span[1] - span[0])
+        try:
+            return json.loads(raw)
+        except ValueError:  # a damaged line is not an answer; the events can still reconstruct one
+            return None
 
     def journal_append(
         self, campaign_id: str, request_id: str, tool: str, digest: str, response: Mapping[str, Any]
@@ -497,10 +516,35 @@ class CampaignStore:
             "response": dict(response),
         }
         path = self.path(campaign_id) / "requests.jsonl"
+        if path.exists():
+            self._repair_journal_tail(campaign_id, path)
         with path.open("ab") as fh:
-            size = path.stat().st_size
-            if size and _line_at(path, size, 1) != b"\n":
-                fh.write(b"\n")  # never glue a line onto a torn one
             fh.write((json.dumps(entry) + "\n").encode("utf-8"))
+            fh.flush()
+            os.fsync(fh.fileno())
+
+    def _repair_journal_tail(self, campaign_id: str, path: Path) -> None:
+        """Make the journal end on a line boundary before appending (lock held).
+
+        A crash can leave a final fragment without its newline. If it is a
+        whole entry that only lacks the newline, the newline is added; if it is
+        torn, it is cut off (it was never an answer, and the events carry the
+        request_id for reconstruction). Either way the next entry never gets
+        glued onto it.
+        """
+        index = self._journal_index(campaign_id, path)
+        size = path.stat().st_size
+        if size == index.offset:
+            return
+        with path.open("r+b") as fh:
+            fh.seek(index.offset)
+            fragment = fh.read()
+            try:
+                json.loads(fragment)
+            except ValueError:
+                fh.truncate(index.offset)
+            else:
+                fh.seek(0, os.SEEK_END)
+                fh.write(b"\n")
             fh.flush()
             os.fsync(fh.fileno())
