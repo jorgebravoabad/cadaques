@@ -5,7 +5,7 @@ the pre-1.0 stability policy. The claim of record is the latest tag.
 Concept DOI, resolving to the latest version:
 [10.5281/zenodo.21293588](https://doi.org/10.5281/zenodo.21293588).
 
-## [0.4.1] — 2026-10 — DOI: pending
+## [0.4.1] — 2026-10 — DOI: [10.5281/zenodo.23563602](https://doi.org/10.5281/zenodo.23563602)
 
 A hardening release of the agent surface. The kernel validation of 0.4.0
 (six properties over thousands of randomized campaigns, SIGKILL and fault-injection
@@ -13,9 +13,6 @@ runs) found four defects in the file-backed workspace; all are fixed here,
 together with the O(1) tool-call work of ADR-0015 and its completion
 (ADR-0016). One call is deprecated: read **Deprecated** first.
 
-<!-- TODO(author): when the release is tagged and archived, replace "DOI: pending"
-     in the heading above with the version DOI Zenodo assigns, and add it to the
-     release notes. CITATION.cff keeps the concept DOI, which does not change. -->
 
 ### Deprecated
 - **Omitting `settled_cost` in `settle_evaluation`** (removal in 0.6.0, per
