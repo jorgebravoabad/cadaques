@@ -5,9 +5,29 @@ the pre-1.0 stability policy. The claim of record is the latest tag.
 Concept DOI, resolving to the latest version:
 [10.5281/zenodo.21293588](https://doi.org/10.5281/zenodo.21293588).
 
-## [Unreleased]
+## [0.4.1] — 2026-10 — DOI: pending
+
+A hardening release of the agent surface. The kernel validation of 0.4.0
+(six properties over thousands of randomized campaigns, SIGKILL and fault-injection
+runs) found four defects in the file-backed workspace; all are fixed here,
+together with the O(1) tool-call work of ADR-0015 and its completion
+(ADR-0016). One call changes behaviour: read **Changed** first.
+
+<!-- TODO(author): when the release is tagged and archived, replace "DOI: pending"
+     in the heading above with the version DOI Zenodo assigns, and add it to the
+     release notes. CITATION.cff keeps the concept DOI, which does not change. -->
 
 ### Changed
+- **BEHAVIOUR CHANGE: `settle_evaluation` requires `settled_cost`.** It used
+  to charge the declared cost when `settled_cost` was omitted and record
+  `settled_source: "declared_default"`, which let an unmeasured number enter
+  the ledger as a measurement (ADR-0006). Omission now returns
+  `invalid_arguments` ("settled_cost is required: report what the evaluation
+  actually cost...") with `next_actions: ["settle_evaluation"]`, and commits
+  nothing. Callers that relied on the default must pass `settled_cost`
+  (`{}` is a legitimate report of zero cost). `cancel_evaluation` is
+  unchanged: it still charges the declared cost by default. Logs recorded by
+  0.4.0 may contain `declared_default`; they still load and replay.
 - **Tool-call latency no longer grows with the log** (ADR-0015). Mutating
   calls commit by appending new events instead of rewriting the log, tool
   calls reuse a validated, incrementally folded session, and a
@@ -15,6 +35,63 @@ Concept DOI, resolving to the latest version:
   mismatch) serves cold status and listing calls. `EventLog.from_jsonl`
   now ignores an unterminated, unparsable final line (a torn append).
   New internals: `StateFold`, `read_events_from`, `replay.restore`.
+- **A new process no longer replays the log on its first call** (ADR-0016),
+  for campaigns whose driver keeps no history (`ExternalDriver`). The
+  snapshot is persisted as schema 2 (adds a checksum of the fold) with a
+  request index, `events.index.json`; a new process starts from them after
+  validating both against the log, folds forward the events appended since,
+  and replays on any mismatch. Workspaces written by 0.4.0 or the ADR-0015
+  branch are read as they are and upgraded by the next commit.
+  `EventLog` gains `base` (events held out of memory).
+- A call that appends several events is committed all or nothing: its first
+  event carries `payload.call_events`, and a log that ends inside such a call
+  (a power loss cut the append short) is read as ending before it (ADR-0016).
+- The request journal is no longer scanned for a `request_id` the record
+  has never seen; `Session` and the store are internal.
+
+### Fixed
+- **`spec.json` is written atomically** (tmp file, fsync, `os.replace`),
+  like `checkpoint.json` and the event log. A SIGKILL during the write used
+  to leave a 0-byte `spec.json` and an unreadable campaign.
+  `CampaignSpec.dump` and `checkpoint()` both go through the new
+  `core.fsio.write_atomic`.
+- **Read-only tools no longer fail under concurrent writers.** A read that
+  overlapped a writer could see a torn file and return `internal_error` (or
+  `readable: false` in `list_campaigns`) for a healthy campaign. Reads are
+  retried with a short back-off and then made once under the campaign lock
+  in shared mode; a really damaged campaign still reports its error.
+- **A retried call gets its original answer** (ADR-0017). A refused
+  `reserve_evaluation` (`budget_exhausted`, `invalid_query`, driver
+  stopped) that committed events and crashed before its journal entry was
+  reconstructed as `ok: true` without an `evaluation_id`. The refusal is
+  now recorded with the events (`payload.refusal`) and returned on retry;
+  settle, cancel, run, stop and create retries return their original result
+  keys too. Older records get the refusal inferred from their events.
+- **A torn request journal no longer breaks every later call.** A crash
+  mid-append left a fragment in `requests.jsonl` that the next write glued
+  into a garbage line, and lookups then raised `JSONDecodeError`. The index
+  skips lines that are not complete entries, a damaged line is not an
+  answer, and the next append repairs the tail first (a fragment that only
+  lacks its newline is kept; a torn one is cut off).
+- `settle_evaluation` and `cancel_evaluation` now feed the result to the
+  live campaign's history and driver, as a replay does. Before, a session
+  kept by ADR-0015 never told a learning driver (`AnnealedLocalDriver`,
+  `BayesianDriver`) about settled results, so it proposed different points
+  from a session rebuilt from disk.
+- The `stopped` event written when a reservation exhausts the budget records
+  the campaign's true `n_queries`.
+
+### Compatibility
+- Event schema `cadaques.events/2` is unchanged; `payload.refusal` is an
+  optional extra key on `driver_proposal`, `rejected` and `stopped` events.
+  Tool input schemas are unchanged except that `settled_cost` is now required
+  by `settle_evaluation`. No public Python interface removed.
+- Workspaces from 0.4.0 are readable; 0.4.1 workspaces (their extra files
+  `snapshot.json` schema 2 and `events.index.json` are caches) are readable
+  by 0.4.0, which ignores them.
+- 265 tests (155 in 0.4.0). The 0.4.0 kernel-validation suite (six properties,
+  SIGKILL, fault injection and a reader-race reproduction) passes with no
+  violation against this release.
 
 ## [0.4.0] — 2026-10 — DOI: [10.5281/zenodo.23474981](https://doi.org/10.5281/zenodo.23474981)
 
