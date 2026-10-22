@@ -63,6 +63,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 REQUEST_SCHEMA: str = "cadaques.requests/1"
 SNAPSHOT_SCHEMA: str = "cadaques.snapshot/1"
+#: Lock-free attempts a read-only call makes before it reads under a shared lock.
+READ_RETRIES: int = 4
 
 _REQUEST_ID = re.compile(rb'^\{"schema": "[^"]*", "request_id": ("(?:[^"\\]|\\.)*")')
 
@@ -209,8 +211,12 @@ class CampaignStore:
 
     # -- locking -----------------------------------------------------------
     @contextmanager
-    def lock(self, campaign_id: str) -> Iterator[None]:
-        """Serialize mutations of one campaign across processes."""
+    def lock(self, campaign_id: str, *, shared: bool = False) -> Iterator[None]:
+        """Serialize mutations of one campaign across processes.
+
+        ``shared=True`` takes the lock in read mode: it waits for a writer to
+        finish, and writers wait for it, but readers do not exclude each other.
+        """
         lock_dir = self.root / ".locks"
         lock_dir.mkdir(parents=True, exist_ok=True)
         with (lock_dir / f"{campaign_id}.lock").open("a") as fh:
@@ -220,7 +226,7 @@ class CampaignStore:
             deadline = time.monotonic() + self.lock_timeout
             while True:
                 try:
-                    fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(fh.fileno(), (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB)
                     break
                 except BlockingIOError:
                     if time.monotonic() >= deadline:
@@ -274,6 +280,27 @@ class CampaignStore:
             except Exception:  # noqa: BLE001 — a snapshot that cannot be proved is ignored
                 pass
         return self._cold(campaign_id)
+
+    def read_session(self, campaign_id: str, *, view: bool = False) -> Session:
+        """:meth:`session` for a caller that does not hold the campaign's lock.
+
+        A lock-free read can overlap a writer (or a writer of an older release
+        that rewrote a file in place) and see a torn file. The read is retried
+        a few times with a short back-off; if it still fails it is made once
+        more holding the lock in shared mode, which waits for any writer to
+        finish. A read-only tool therefore never reports an internal error for
+        a campaign that is merely being written; a campaign that is really
+        damaged still fails, from the locked read.
+        """
+        for attempt in range(READ_RETRIES):
+            try:
+                return self.session(campaign_id, view=view)
+            except ToolError:
+                raise
+            except Exception:  # noqa: BLE001 — probably a torn read; try again
+                time.sleep(0.002 * 2 ** attempt)
+        with self.lock(campaign_id, shared=True):
+            return self.session(campaign_id, view=view)
 
     def release(self, session: Session) -> None:
         """Hand a session back for reuse by the next call, if nothing is uncommitted in it."""

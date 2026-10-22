@@ -95,6 +95,8 @@ class _Call:
     toolbox: "Toolbox"
     args: Mapping[str, Any]
     committed: bool = False
+    #: A read-only call holds no campaign lock and must read defensively.
+    readonly: bool = False
     sessions: dict[str, Session] = field(default_factory=dict)
 
     @property
@@ -105,7 +107,8 @@ class _Call:
         """The campaign's session for this call (ADR-0015); a view is read-only."""
         held = self.sessions.get(campaign_id)
         if held is None or (not view and not held.full):
-            held = self.sessions[campaign_id] = self.store.session(campaign_id, view=view)
+            read = self.store.read_session if self.readonly else self.store.session
+            held = self.sessions[campaign_id] = read(campaign_id, view=view)
         return held
 
     def new_session(self, campaign_id: str, campaign: Campaign) -> Session:
@@ -808,7 +811,7 @@ class Toolbox:
                                 "An agent actor must state its model (and preferably version).",
                                 details={"actor": actor}, next_actions=[name])
             if tool.read_only:
-                call = _Call(self, args)
+                call = _Call(self, args, readonly=True)
                 try:
                     result, next_actions = tool.handler(call)
                 finally:
