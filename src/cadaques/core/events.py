@@ -69,9 +69,16 @@ class Event:
 
 @dataclass
 class EventLog:
-    """Append-only, sequence-numbered log of campaign events."""
+    """Append-only, sequence-numbered log of campaign events.
+
+    ``base`` is the number of earlier events that exist on disk but are not
+    held in memory (a campaign restored from a snapshot, ADR-0016): ``events``
+    then holds only the tail, sequence numbers and ``len()`` still count from
+    the start of the record, and iteration covers the held events.
+    """
 
     events: list[Event] = field(default_factory=list)
+    base: int = 0
     _actor: Mapping[str, Any] | None = field(default=None, repr=False, compare=False)
     _request_id: str | None = field(default=None, repr=False, compare=False)
 
@@ -79,7 +86,7 @@ class EventLog:
         if kind not in EVENT_KINDS:
             raise ValueError(f"Unknown event kind {kind!r}; schema {EVENT_SCHEMA}")
         event = Event(
-            seq=len(self.events),
+            seq=len(self),
             kind=kind,
             payload=payload,
             actor=self._actor,
@@ -105,7 +112,7 @@ class EventLog:
         return iter(self.events)
 
     def __len__(self) -> int:
-        return len(self.events)
+        return self.base + len(self.events)
 
     def of_kind(self, kind: str) -> list[Event]:
         return [e for e in self.events if e.kind == kind]
@@ -156,7 +163,8 @@ def event_from_dict(raw: Mapping[str, Any]) -> Event:
 
 
 def read_events_from(
-    path: str | Path, offset: int = 0, expected_seq: int = 0
+    path: str | Path, offset: int = 0, expected_seq: int = 0,
+    spans: list[tuple[int, int]] | None = None,
 ) -> tuple[list[Event], int, bytes]:
     """Read the events stored at and after byte ``offset`` of a JSONL log.
 
@@ -166,6 +174,8 @@ def read_events_from(
     sequence of newline-terminated lines; an unterminated final fragment that
     does not parse is a torn append and is left unread, so ``end_offset`` is
     always a commit boundary. Sequence numbers must run on from ``expected_seq``.
+    If ``spans`` is given, the ``(start, end)`` byte range of every event read is
+    appended to it, in order.
     """
     with Path(path).open("rb") as fh:
         fh.seek(offset)
@@ -188,6 +198,8 @@ def read_events_from(
                     f"Event log corrupt: seq {event.seq} at position {expected_seq + len(events)}"
                 )
             events.append(event)
+            if spans is not None:
+                spans.append((offset + pos, offset + end))
             last = line
         pos = end
     return events, offset + pos, last

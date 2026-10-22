@@ -117,3 +117,30 @@ class TestRejection:
         out = c.run(max_queries=500)
         assert out.stop_reason == "success"
         assert out.best is not None and out.best.value >= -1.0
+
+
+class TestLogTail:
+    """A log restored from a snapshot holds only its tail but numbers events from the record's start."""
+
+    def test_sequence_numbers_and_length_count_the_unread_prefix(self):
+        from cadaques import EventLog
+
+        log = EventLog(base=5)
+        first = log.append("stopped", reason="operator_stopped")
+        assert first.seq == 5 and len(log) == 6 and len(log.events) == 1
+
+    def test_read_events_from_reports_the_byte_span_of_each_event(self, tmp_path):
+        from cadaques import EventLog
+        from cadaques.core.events import read_events_from
+
+        log = EventLog()
+        for i in range(3):
+            log.append("stopped", reason="r", note="x" * i)
+        path = log.to_jsonl(tmp_path / "events.jsonl")
+        spans: list = []
+        events, end, _ = read_events_from(path, 0, spans=spans)
+        data = path.read_bytes()
+        assert len(spans) == len(events) == 3 and end == len(data)
+        assert [data[a:b].count(b"\n") for a, b in spans] == [1, 1, 1]
+        assert spans[0][0] == 0 and spans[-1][1] == end
+        assert all(a2 == b1 for (_, b1), (a2, _) in zip(spans, spans[1:]))
