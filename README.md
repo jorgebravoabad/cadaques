@@ -200,9 +200,11 @@ tb.call("settle_evaluation", {"campaign_id": "pc1d", "actor": me, "request_id": 
                               "artifacts": ["slurm:123456"]})
 ```
 
-`settled_cost` is required: settlement is the measurement, and the kernel never
-assumes the declared price in its place (omitting it is an `invalid_arguments`
-error that says so).
+Pass `settled_cost`: settlement is the measurement. Omitting it is deprecated
+(removal in 0.6.0, ADR-0010): the declared price is charged and recorded as
+`settled_source: "declared_default"`, a `DeprecationWarning` is raised, and the
+response carries `"warnings": [{"code": "deprecated_declared_default", ...,
+"removal": "0.6.0"}]`.
 
 Every response is an envelope (`ok`, `result` or a structured `error` with
 `retryable` and `next_actions`). Admission counts outstanding reservations, so

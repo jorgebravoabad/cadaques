@@ -32,6 +32,7 @@ import hashlib
 import json
 import math
 import time
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, cast
@@ -95,6 +96,8 @@ class _Call:
     toolbox: "Toolbox"
     args: Mapping[str, Any]
     committed: bool = False
+    #: Machine-readable notices for the response envelope's ``warnings`` list.
+    warnings: list[dict[str, str]] = field(default_factory=list)
     #: A read-only call holds no campaign lock and must read defensively.
     readonly: bool = False
     sessions: dict[str, Session] = field(default_factory=dict)
@@ -553,19 +556,13 @@ def _open_reservation(session: Session, evaluation_id: str) -> Event:
     return reservation
 
 
-_SETTLED_COST_HINT = (
-    "settled_cost is required: report what the evaluation actually cost, per currency, e.g. "
-    '{"seconds": 12.5}. CADAQUES no longer assumes the declared cost when it is omitted. '
-    "Pass an empty object ({}) only if the evaluation really cost nothing."
-)
-
-
-def _settled_cost_missing(problems: list[str] | None = None) -> ToolError:
-    details: dict[str, Any] = {"field": "settled_cost"}
-    if problems:
-        details["problems"] = problems
-    return ToolError("invalid_arguments", _SETTLED_COST_HINT, details=details,
-                     next_actions=["settle_evaluation"])
+DEPRECATED_DECLARED_DEFAULT = {
+    "code": "deprecated_declared_default",
+    "message": ("settle_evaluation without settled_cost charged the declared cost and recorded "
+                "settled_source='declared_default'. settled_cost will be required from 0.6.0; "
+                "pass the measured cost (an empty object {} if the evaluation cost nothing)."),
+    "removal": "0.6.0",
+}
 
 
 def _settle_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
@@ -576,12 +573,13 @@ def _settle_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
     reservation = _open_reservation(session, evaluation_id)
     rp = reservation.payload
     declared = Cost.from_dict(rp["declared"])
-    # No silent fallback to the declared cost (ADR-0006): settlement is the ex-post
-    # measurement, so the caller must state it. The schema enforces this; the check
-    # is kept so that the handler is safe when called with unvalidated arguments.
-    if "settled_cost" not in a:
-        raise _settled_cost_missing()
-    settled, source = _cost(a["settled_cost"]), "reported"
+    if "settled_cost" in a:
+        settled, source = _cost(a["settled_cost"]), "reported"
+    else:
+        # Deprecated (ADR-0010; required from 0.6.0): an unmeasured number enters the
+        # ledger as if it were a measurement (ADR-0006), so the response says so.
+        settled, source = declared, "declared_default"
+        call.warnings.append(dict(DEPRECATED_DECLARED_DEFAULT))
     outcome = a["outcome"]
     if outcome == "completed" and "value" not in a:
         raise ToolError("invalid_arguments", "A completed evaluation needs a 'value'.",
@@ -778,22 +776,24 @@ TOOLS: tuple[Tool, ...] = (
     ),
     Tool(
         "settle_evaluation",
-        "Report the outcome of a reserved evaluation with its real cost (settled_cost is "
-        "required, there is no default). Settlement is charged even if it overruns the budget: "
-        "the work was done. Failures are results too.",
+        "Report the outcome of a reserved evaluation with its real cost. Omitting settled_cost "
+        "is deprecated (it charges the declared cost; required from 0.6.0). Settlement is "
+        "charged even if it overruns the budget: the work was done. Failures are results too.",
         _obj({**_CID, **_MUT,
               "evaluation_id": {"type": "string", "minLength": 1},
               "outcome": {"type": "string", "enum": ["completed", "failed"]},
               "value": {"type": "number", "description": "Objective value; required if completed."},
               "settled_cost": {**S.COST, "description": (
-                  "What the evaluation actually cost, per currency; required. Omitted "
-                  "currencies are zero.")},
+                  "What the evaluation actually cost, per currency; omitted currencies are zero. "
+                  "DEPRECATED to omit: the declared cost is charged "
+                  "(settled_source='declared_default') and the response carries a warning; "
+                  "required from 0.6.0.")},
               "failure": _obj({"kind": {"type": "string"}, "detail": {"type": "string"},
                                "retryable": {"type": "boolean"}}),
               "timings": {"type": "object", "additionalProperties": {"type": "number"},
                           "description": "Optional breakdown, e.g. queue_seconds, run_seconds."},
               "artifacts": {"type": "array", "items": {"type": "string"}, "maxItems": 100}},
-             _MUT_REQ + ["evaluation_id", "outcome", "settled_cost"]),
+             _MUT_REQ + ["evaluation_id", "outcome"]),
         _out({"evaluation_id": {"type": "string"}, "settled_cost": {"type": "object"},
               "overrun": {"type": "object"}, "status": _STATUS_OUT},
              ["evaluation_id", "settled_cost", "status"]),
@@ -863,8 +863,6 @@ class Toolbox:
                                 next_actions=["describe_capabilities"])
             problems = S.validate(args, tool.input_schema)
             if problems:
-                if name == "settle_evaluation" and "/settled_cost: required" in problems:
-                    raise _settled_cost_missing(problems)
                 raise ToolError("invalid_arguments", "Arguments do not match the tool schema.",
                                 details={"problems": problems, "input_schema": tool.input_schema},
                                 next_actions=[name])
@@ -912,13 +910,18 @@ class Toolbox:
                 try:
                     result, next_actions = tool.handler(call)
                     response = self._ok(tool.name, result, next_actions)
+                    if call.warnings:
+                        response["warnings"] = list(call.warnings)
                 except ToolError as err:
                     response = self._err(tool.name, err)
                 if call.committed:
                     self.store.journal_append(cid, request_id, tool.name, digest, response)
-                return response
         finally:
             call.release()
+        # Only a call that ran the handler warns; a replay returns the journaled response.
+        for w in (call.warnings if response.get("ok") else ()):
+            warnings.warn(w["message"], DeprecationWarning, stacklevel=3)
+        return response
 
     def _reconstructed(self, name: str, cid: str, session: Session,
                        events: list[Event]) -> dict[str, Any]:
@@ -978,7 +981,10 @@ class Toolbox:
             result = {"stopped": True, "already_stopped": False, "status": status}
         else:
             result = {"committed_events": [e.as_dict() for e in events], "status": status}
-        return {**self._ok(name, result, _status_next(status)), **flags}
+        out = {**self._ok(name, result, _status_next(status)), **flags}
+        if name == "settle_evaluation" and result.get("settled_source") == "declared_default":
+            out["warnings"] = [dict(DEPRECATED_DECLARED_DEFAULT)]
+        return out
 
     @staticmethod
     def _ok(name: str, result: Mapping[str, Any], next_actions: list[str]) -> dict[str, Any]:

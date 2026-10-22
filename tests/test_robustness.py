@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import os
 
+import warnings
+
 import pytest
 
 from cadaques.agent import Toolbox
@@ -216,52 +218,82 @@ class TestTornJournalTail:
         assert again["replayed"] and not again.get("reconstructed")
 
 
-class TestSettledCostIsRequired:
-    """settle_evaluation used to charge the declared cost when settled_cost was omitted."""
+class TestOmittingSettledCostIsDeprecated:
+    """settle_evaluation without settled_cost still settles at the declared cost (ADR-0010)."""
 
     def _pending(self, tmp_path):
         tb = Toolbox(tmp_path / "ws")
         assert call(tb, "create_campaign", "mk", spec=spec(seconds=100.0))["ok"]
         r = call(tb, "reserve_evaluation", "r1", params={"x": 0.5})
-        return tb, r["result"]["evaluation_id"]
+        return tb, r["result"]["evaluation_id"], r["result"]["declared_cost"]
 
-    def test_omission_is_refused_with_a_helpful_message(self, tmp_path):
-        tb, ev = self._pending(tmp_path)
-        before = tb.call("get_campaign_status", {"campaign_id": "c"})["result"]
-        r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="completed", value=1.0)
-        assert not r["ok"] and r["error"]["code"] == "invalid_arguments"
-        assert "settled_cost" in r["error"]["message"] and "actually cost" in r["error"]["message"]
-        assert r["error"]["details"]["field"] == "settled_cost"
-        assert r["error"]["next_actions"] == ["settle_evaluation"]
-        after = tb.call("get_campaign_status", {"campaign_id": "c"})["result"]
-        assert after["n_events"] == before["n_events"] and after["budget"] == before["budget"]
-        assert [p["evaluation_id"] for p in after["pending"]] == [ev]  # still open
+    def test_omission_succeeds_at_the_declared_cost_and_warns_in_python_and_in_the_envelope(self, tmp_path):
+        tb, ev, declared = self._pending(tmp_path)
+        with pytest.warns(DeprecationWarning, match="required from 0.6.0") as seen:
+            r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="completed", value=1.0)
+        assert r["ok"] and r["result"]["settled_source"] == "declared_default"
+        assert r["result"]["settled_cost"] == declared
+        assert [w["code"] for w in r["warnings"]] == ["deprecated_declared_default"]
+        assert r["warnings"][0]["removal"] == "0.6.0" and "settled_cost" in r["warnings"][0]["message"]
+        assert seen[0].filename == __file__  # attributed to the caller of Toolbox.call
+        events = tb.call("get_events", {"campaign_id": "c"})["result"]["events"]
+        assert events[-1]["payload"]["settled_source"] == "declared_default"
 
-    def test_failed_outcomes_must_report_their_cost_too(self, tmp_path):
-        tb, ev = self._pending(tmp_path)
-        r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="failed")
-        assert r["error"]["code"] == "invalid_arguments" and "settled_cost" in r["error"]["message"]
+    def test_failed_outcomes_may_omit_it_too(self, tmp_path):
+        tb, ev, _ = self._pending(tmp_path)
+        with pytest.warns(DeprecationWarning):
+            r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="failed")
+        assert r["ok"] and r["warnings"][0]["code"] == "deprecated_declared_default"
 
-    def test_the_handler_does_not_default_even_if_the_schema_is_bypassed(self, tmp_path):
-        from cadaques.agent import tools as tools_mod
+    def test_a_deprecated_settle_replays_with_its_warning_but_does_not_warn_again(self, tmp_path):
+        tb, ev, _ = self._pending(tmp_path)
+        with pytest.warns(DeprecationWarning):
+            first = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="completed", value=1.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            again = call(Toolbox(tmp_path / "ws"), "settle_evaluation", "s1", evaluation_id=ev,
+                         outcome="completed", value=1.0)
+        assert again["replayed"] and again["warnings"] == first["warnings"]
+        assert again["result"] == first["result"]
 
-        tb, ev = self._pending(tmp_path)
-        call_ctx = tools_mod._Call(tb, {"campaign_id": "c", "evaluation_id": ev, "outcome": "completed",
-                                         "value": 1.0, "actor": AGENT, "request_id": "s1"})
-        with pytest.raises(tools_mod.ToolError) as err:
-            tools_mod._settle_evaluation(call_ctx)
-        assert err.value.code == "invalid_arguments"
+    def test_a_reconstructed_response_keeps_the_warning(self, tmp_path):
+        tb, ev, _ = self._pending(tmp_path)
+        with pytest.warns(DeprecationWarning):
+            call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="completed", value=1.0)
+        (tmp_path / "ws" / "c" / "requests.jsonl").unlink(missing_ok=True)
+        again = call(Toolbox(tmp_path / "ws"), "settle_evaluation", "s1", evaluation_id=ev,
+                     outcome="completed", value=1.0)
+        assert again["replayed"] and again["reconstructed"]
+        assert again["result"]["settled_source"] == "declared_default"
+        assert again["warnings"][0]["code"] == "deprecated_declared_default"
 
-    def test_the_schema_declares_it_required(self, tmp_path):
+    def test_a_refused_omission_does_not_warn(self, tmp_path):
+        tb, ev, _ = self._pending(tmp_path)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="completed")  # no value
+        assert not r["ok"] and "warnings" not in r
+
+    def test_the_schema_leaves_it_optional_and_marks_omission_deprecated(self, tmp_path):
         schema = next(t for t in Toolbox(tmp_path / "ws").schemas() if t["name"] == "settle_evaluation")
-        assert "settled_cost" in schema["input_schema"]["required"]
+        assert "settled_cost" not in schema["input_schema"]["required"]
+        assert "DEPRECATED" in schema["input_schema"]["properties"]["settled_cost"]["description"]
 
-    def test_an_explicit_value_is_recorded_as_reported_and_an_empty_cost_is_a_free_evaluation(self, tmp_path):
-        tb, ev = self._pending(tmp_path)
-        r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="completed", value=1.0,
-                 settled_cost={})
-        assert r["ok"] and r["result"]["settled_source"] == "reported"
+    def test_an_explicit_value_is_recorded_as_reported_without_a_warning(self, tmp_path):
+        tb, ev, _ = self._pending(tmp_path)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="completed", value=1.0,
+                     settled_cost={})
+        assert r["ok"] and r["result"]["settled_source"] == "reported" and "warnings" not in r
         assert r["result"]["status"]["budget"]["spent"]["seconds"] == 0.0
+
+    def test_cancel_still_charges_the_declared_cost_by_default_without_a_warning(self, tmp_path):
+        tb, ev, declared = self._pending(tmp_path)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            r = call(tb, "cancel_evaluation", "x1", evaluation_id=ev)
+        assert r["ok"] and r["result"]["settled_cost"] == declared and "warnings" not in r
 
 
 class Crash(BaseException):

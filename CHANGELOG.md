@@ -11,23 +11,32 @@ A hardening release of the agent surface. The kernel validation of 0.4.0
 (six properties over thousands of randomized campaigns, SIGKILL and fault-injection
 runs) found four defects in the file-backed workspace; all are fixed here,
 together with the O(1) tool-call work of ADR-0015 and its completion
-(ADR-0016). One call changes behaviour: read **Changed** first.
+(ADR-0016). One call is deprecated: read **Deprecated** first.
 
 <!-- TODO(author): when the release is tagged and archived, replace "DOI: pending"
      in the heading above with the version DOI Zenodo assigns, and add it to the
      release notes. CITATION.cff keeps the concept DOI, which does not change. -->
 
+### Deprecated
+- **Omitting `settled_cost` in `settle_evaluation`** (removal in 0.6.0, per
+  ADR-0010: a shim spanning at least two minor releases). Omission still
+  works exactly as in 0.4.0: the declared cost is charged and the event
+  records `settled_source: "declared_default"`. But it lets an unmeasured
+  number enter the ledger as a measurement (ADR-0006), so it now warns: the
+  call emits a Python `DeprecationWarning` (attributed to the caller of
+  `Toolbox.call`), and the response envelope gains an optional `warnings`
+  list, present only when there is something to say:
+  `"warnings": [{"code": "deprecated_declared_default", "message": "...",
+  "removal": "0.6.0"}]`. The call succeeds (`ok: true`) and is idempotent
+  and replayable like any other settle; a replay returns the same
+  `warnings` without warning again. The `settled_cost` schema description
+  marks omission as deprecated. Pass the measured cost (`{}` is a
+  legitimate report of zero cost); from 0.6.0 omission will be
+  `invalid_arguments`. `cancel_evaluation` is unchanged: it still charges
+  the declared cost by default, the conservative choice for work that
+  produced nothing, and does not warn.
+
 ### Changed
-- **BEHAVIOUR CHANGE: `settle_evaluation` requires `settled_cost`.** It used
-  to charge the declared cost when `settled_cost` was omitted and record
-  `settled_source: "declared_default"`, which let an unmeasured number enter
-  the ledger as a measurement (ADR-0006). Omission now returns
-  `invalid_arguments` ("settled_cost is required: report what the evaluation
-  actually cost...") with `next_actions: ["settle_evaluation"]`, and commits
-  nothing. Callers that relied on the default must pass `settled_cost`
-  (`{}` is a legitimate report of zero cost). `cancel_evaluation` is
-  unchanged: it still charges the declared cost by default. Logs recorded by
-  0.4.0 may contain `declared_default`; they still load and replay.
 - **Tool-call latency no longer grows with the log** (ADR-0015). Mutating
   calls commit by appending new events instead of rewriting the log, tool
   calls reuse a validated, incrementally folded session, and a
@@ -84,12 +93,13 @@ together with the O(1) tool-call work of ADR-0015 and its completion
 ### Compatibility
 - Event schema `cadaques.events/2` is unchanged; `payload.refusal` is an
   optional extra key on `driver_proposal`, `rejected` and `stopped` events.
-  Tool input schemas are unchanged except that `settled_cost` is now required
-  by `settle_evaluation`. No public Python interface removed.
+  Tool input schemas are unchanged (only the description of `settled_cost` in
+  `settle_evaluation` now marks omission as deprecated); response envelopes
+  gain the optional `warnings` list. No public Python interface removed.
 - Workspaces from 0.4.0 are readable; 0.4.1 workspaces (their extra files
   `snapshot.json` schema 2 and `events.index.json` are caches) are readable
   by 0.4.0, which ignores them.
-- 265 tests (155 in 0.4.0). The 0.4.0 kernel-validation suite (six properties,
+- 268 tests (155 in 0.4.0). The 0.4.0 kernel-validation suite (six properties,
   SIGKILL, fault injection and a reader-race reproduction) passes with no
   violation against this release.
 

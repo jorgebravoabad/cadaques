@@ -221,7 +221,7 @@ class TestResume:
             r = a("reserve_evaluation", request_id=f"r{i}")["result"]
             via_tools.append(r["params"])
             a("settle_evaluation", request_id=f"s{i}", evaluation_id=r["evaluation_id"],
-              outcome="completed", value=r["params"]["x"])
+              outcome="completed", value=r["params"]["x"], settled_cost={"seconds": 1.0})
 
         live = CampaignSpec.loads(json.dumps({"schema": "cadaques.spec/1", **spec})).build()
         in_memory = []
