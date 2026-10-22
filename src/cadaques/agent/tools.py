@@ -224,6 +224,22 @@ def _check_finite(name: str, value: Any) -> None:
                         details={"field": name})
 
 
+def _refuse(call: _Call, session: Session, err: ToolError) -> ToolError:
+    """Commit the events of a refused call and return the refusal to raise.
+
+    A refusal can still change the record (the operator's decision cost, a
+    rejected point, the ``stopped`` event). The answer is written into the last
+    of those events, so that the record alone can give the original answer to a
+    retry whose journal entry was lost to a crash (ADR-0013, ADR-0016).
+    """
+    events = session.campaign.events.events
+    request_id = call.args["request_id"]
+    if events and events[-1].request_id == request_id:
+        events[-1].payload["refusal"] = err.as_dict()
+    call.save(session)
+    return err
+
+
 # ====================================================================== handlers
 def _describe_capabilities(call: _Call) -> tuple[dict[str, Any], list[str]]:
     tb = call.toolbox
@@ -402,14 +418,13 @@ def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
             if campaign.task is not None and not campaign.task.admits(query):
                 campaign.events.append("rejected", label="operator", params=dict(query.params),
                                        fidelity=dict(query.fidelity), reason="task_validation")
-                call.save(session)
-                raise ToolError(
+                raise _refuse(call, session, ToolError(
                     "invalid_query",
                     "The point is outside the task's search space or violates a constraint.",
                     details={"params": dict(query.params),
                              "bounds": {k: list(v) for k, v in campaign.task.space.bounds.items()}},
                     next_actions=["reserve_evaluation", "get_campaign_status"],
-                )
+                ))
 
         declared = campaign.oracle.price(query)
         if not campaign.budget.can_afford(state.reserved + declared):
@@ -417,8 +432,7 @@ def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
                 campaign.events.append("stopped", reason="budget_exhausted",
                                        n_queries=len(campaign.history),
                                        spent=campaign.budget.spent.as_dict())
-            call.save(session)
-            raise ToolError(
+            raise _refuse(call, session, ToolError(
                 "budget_exhausted",
                 "The declared cost of this evaluation does not fit in the budget left after "
                 "outstanding reservations.",
@@ -429,7 +443,7 @@ def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
                          "campaign_stopped": not state.pending},
                 next_actions=(["settle_evaluation", "cancel_evaluation", "get_campaign_status"]
                               if state.pending else ["get_campaign_status", "get_events"]),
-            )
+            ))
 
         evaluation_id = f"ev-{len(campaign.events):06d}"
         campaign.events.append(
@@ -463,9 +477,9 @@ def _driver_proposal(call: _Call, session: Session, decision_cost: Cost,
             campaign.events.append("stopped", reason="driver_stopped",
                                    n_queries=len(campaign.history),
                                    spent=campaign.budget.spent.as_dict())
-            call.save(session)
-            raise ToolError("campaign_stopped", "The driver ended the campaign.",
-                            details={"stop_reason": "driver_stopped"}) from None
+            raise _refuse(call, session, ToolError(
+                "campaign_stopped", "The driver ended the campaign.",
+                details={"stop_reason": "driver_stopped"})) from None
         elapsed = time.perf_counter() - t0
         metered = Cost()
         if campaign.meter_driver:
@@ -491,10 +505,35 @@ def _driver_proposal(call: _Call, session: Session, decision_cost: Cost,
             campaign.events.append("stopped", reason="rejection_limit",
                                    n_queries=len(campaign.history),
                                    spent=campaign.budget.spent.as_dict())
-            call.save(session)
-            raise ToolError("campaign_stopped",
-                            "The driver kept proposing points outside the task.",
-                            details={"stop_reason": "rejection_limit"})
+            raise _refuse(call, session, ToolError(
+                "campaign_stopped", "The driver kept proposing points outside the task.",
+                details={"stop_reason": "rejection_limit"}))
+
+
+def _infer_refusal(events: list[Event], session: Session) -> ToolError:
+    """The refusal a reserve call must have made, read off the events it committed.
+
+    Used only for records that predate the ``refusal`` payload key (0.4.0 and
+    the ADR-0015 branch), where the original details were not kept.
+    """
+    last = events[-1]
+    note = {"reconstructed_from_events": [e.seq for e in events]}
+    if last.kind == "rejected":
+        return ToolError("invalid_query", "The point is outside the task's search space or "
+                         "violates a constraint.",
+                         details={**note, "params": last.payload.get("params", {})},
+                         next_actions=["reserve_evaluation", "get_campaign_status"])
+    if last.kind == "stopped" and last.payload.get("reason") != "budget_exhausted":
+        return ToolError("campaign_stopped", "The campaign stopped during this call.",
+                         details={**note, "stop_reason": last.payload.get("reason")})
+    pending = [e.payload["evaluation_id"] for e in session.pending()]
+    return ToolError(
+        "budget_exhausted",
+        "The declared cost of this evaluation does not fit in the budget left after "
+        "outstanding reservations.",
+        details={**note, "pending": pending, "campaign_stopped": last.kind == "stopped"},
+        next_actions=(["settle_evaluation", "cancel_evaluation", "get_campaign_status"]
+                      if pending else ["get_campaign_status", "get_events"]))
 
 
 def _open_reservation(session: Session, evaluation_id: str) -> Event:
@@ -879,21 +918,63 @@ class Toolbox:
 
     def _reconstructed(self, name: str, cid: str, session: Session,
                        events: list[Event]) -> dict[str, Any]:
-        """The call committed but its response was never journaled (crash window)."""
+        """The call committed but its response was never journaled (crash window).
+
+        The answer is rebuilt from the events the call left behind and has the
+        shape of the original: the same result keys for a success, and for a
+        refusal that committed events (``budget_exhausted``, ``invalid_query``,
+        ``campaign_stopped``) the original error, never a success. The budget
+        and status blocks describe the campaign as it is now.
+        """
+        flags = {"replayed": True, "reconstructed": True}
+        refusal = next((e.payload["refusal"] for e in reversed(events)
+                        if e.payload.get("refusal")), None)
+        if refusal is not None:
+            return {"ok": False, "tool": name, "error": dict(refusal), **flags}
         campaign = session.campaign
-        reserved = [e for e in events if e.kind == "evaluation_reserved"]
-        if name == "reserve_evaluation" and reserved:
+        status = _status(cid, session)
+
+        def of_kind(*kinds: str) -> list[Event]:
+            return [e for e in events if e.kind in kinds]
+
+        if name == "create_campaign" and of_kind("campaign_started"):
+            result = {"created": True, "spec_sha256": events[0].payload.get("spec_sha256"),
+                      "status": status}
+        elif name == "reserve_evaluation":
+            reserved = of_kind("evaluation_reserved")
+            if not reserved:  # a refusal recorded by a release that kept no answer with it
+                return {**self._err(name, _infer_refusal(events, session)), **flags}
             p = reserved[-1].payload
-            state = session.state()
             result = {"campaign_id": cid, "evaluation_id": p["evaluation_id"],
                       "params": p["params"], "fidelity": p["fidelity"], "tag": p.get("tag", ""),
-                      "declared_cost": p["declared"], "budget": _budget(campaign, state)}
-            return {**self._ok(name, result, ["settle_evaluation", "cancel_evaluation"]),
-                    "replayed": True, "reconstructed": True}
-        status = _status(cid, session)
-        result = {"committed_events": [e.as_dict() for e in events], "status": status}
-        return {**self._ok(name, result, _status_next(status)),
-                "replayed": True, "reconstructed": True}
+                      "declared_cost": p["declared"],
+                      "budget": _budget(campaign, session.state())}
+            return {**self._ok(name, result, ["settle_evaluation", "cancel_evaluation"]), **flags}
+        elif name == "settle_evaluation" and of_kind("oracle_result", "oracle_failure"):
+            e = of_kind("oracle_result", "oracle_failure")[-1]
+            declared = Cost.from_dict(e.payload["declared"])
+            settled = Cost.from_dict(e.payload["settled"])
+            result = {"evaluation_id": e.payload["evaluation_id"],
+                      "outcome": "completed" if e.kind == "oracle_result" else "failed",
+                      "declared_cost": declared.as_dict(), "settled_cost": settled.as_dict(),
+                      "settled_source": e.payload.get("settled_source", "reported"),
+                      "overrun": (settled - declared).as_dict(), "status": status}
+        elif name == "cancel_evaluation" and of_kind("evaluation_cancelled"):
+            e = of_kind("evaluation_cancelled")[-1]
+            result = {"evaluation_id": e.payload["evaluation_id"], "cancelled": True,
+                      "settled_cost": e.payload["settled"],
+                      "settled_source": e.payload.get("settled_source", "reported"),
+                      "status": status}
+        elif name == "run_campaign":
+            stops = of_kind("stopped")
+            result = {"stop_reason": stops[-1].payload["reason"] if stops else "max_queries",
+                      "n_new_queries": len(of_kind("oracle_result", "oracle_failure")),
+                      "status": status}
+        elif name == "stop_campaign" and of_kind("stopped"):
+            result = {"stopped": True, "already_stopped": False, "status": status}
+        else:
+            result = {"committed_events": [e.as_dict() for e in events], "status": status}
+        return {**self._ok(name, result, _status_next(status)), **flags}
 
     @staticmethod
     def _ok(name: str, result: Mapping[str, Any], next_actions: list[str]) -> dict[str, Any]:
