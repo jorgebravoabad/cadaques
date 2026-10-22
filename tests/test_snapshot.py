@@ -103,7 +103,7 @@ class TestSnapshotEquivalence:
     def test_written_snapshot_describes_the_log(self, tmp_path):
         make(tmp_path, 10)
         doc = json.loads(snap_path(tmp_path).read_text())
-        assert doc["schema"] == "cadaques.snapshot/1"
+        assert doc["schema"] == "cadaques.snapshot/2"
         assert doc["n_events"] == len(EventLog.from_jsonl(log_path(tmp_path)))
         assert doc["offset"] == log_path(tmp_path).stat().st_size
         assert StateFold.from_dict(doc["fold"]).state() == full_state(tmp_path)

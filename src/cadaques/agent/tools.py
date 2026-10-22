@@ -363,7 +363,7 @@ def _get_campaign_status(call: _Call) -> tuple[dict[str, Any], list[str]]:
 def _get_events(call: _Call) -> tuple[dict[str, Any], list[str]]:
     a = call.args
     session = call.session(a["campaign_id"])
-    log = session.campaign.events.events
+    log = session.all_events()
     since, limit = a.get("since_seq", 0), a.get("limit", 200)
     kinds = set(a.get("kinds", EVENT_KINDS))
     page: list[Event] = []
@@ -430,7 +430,7 @@ def _reserve_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
         if not campaign.budget.can_afford(state.reserved + declared):
             if not state.pending:
                 campaign.events.append("stopped", reason="budget_exhausted",
-                                       n_queries=len(campaign.history),
+                                       n_queries=state.n_queries,
                                        spent=campaign.budget.spent.as_dict())
             raise _refuse(call, session, ToolError(
                 "budget_exhausted",
@@ -894,19 +894,21 @@ class Toolbox:
         call = _Call(self, args)
         try:
             with self.store.lock(cid):
-                prior = self.store.journal_lookup(cid, request_id)
-                if prior is not None:
-                    if prior["args_sha256"] != digest:
-                        raise ToolError(
-                            "idempotency_conflict",
-                            f"request_id {request_id!r} was already used for a different call.",
-                            details={"request_id": request_id, "previous_tool": prior["tool"]})
-                    return {**prior["response"], "replayed": True}
-                if self.store.exists(cid):
-                    session = call.session(cid)
-                    committed = session.events_for(request_id)
-                    if committed:
-                        return self._reconstructed(tool.name, cid, session, committed)
+                session = call.session(cid) if self.store.exists(cid) else None
+                # Every journal entry belongs to a call that committed events carrying its
+                # request_id, so a request_id the record has never seen cannot be in the journal
+                # (and the journal is not read at all on the common path).
+                committed = session.events_for(request_id) if session is not None else []
+                if committed:
+                    prior = self.store.journal_lookup(cid, request_id)
+                    if prior is not None:
+                        if prior["args_sha256"] != digest:
+                            raise ToolError(
+                                "idempotency_conflict",
+                                f"request_id {request_id!r} was already used for a different call.",
+                                details={"request_id": request_id, "previous_tool": prior["tool"]})
+                        return {**prior["response"], "replayed": True}
+                    return self._reconstructed(tool.name, cid, session, committed)
                 try:
                     result, next_actions = tool.handler(call)
                     response = self._ok(tool.name, result, next_actions)
