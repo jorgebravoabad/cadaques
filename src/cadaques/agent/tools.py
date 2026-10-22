@@ -44,7 +44,7 @@ from ..core.spec import SPEC_SCHEMA, CampaignSpec, SpecError
 from ..drivers.external import ExternalDriver
 from ..oracles.external import ExternalOracle
 from ..runtime.campaign import TERMINAL_STOP_REASONS, Campaign, DriverStopped
-from ..runtime.replay import CHECKPOINT_SCHEMA
+from ..runtime.replay import CHECKPOINT_SCHEMA, apply_event
 from ..runtime.state import CampaignState
 from . import schema as S
 from .components import ComponentRegistry
@@ -593,19 +593,21 @@ def _settle_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
         timings=dict(a.get("timings", {})), artifacts=list(a.get("artifacts", [])),
     )
     with campaign.events.acting_as(a["actor"], a["request_id"]):
-        campaign.budget.charge(settled, settle=True)
         if outcome == "completed":
             value = float(a["value"])
-            campaign.events.append("oracle_result", value=value, status="completed", **common)
+            event = campaign.events.append("oracle_result", value=value, status="completed", **common)
         else:
             failure = dict(a.get("failure", {}))
-            campaign.events.append(
+            event = campaign.events.append(
                 "oracle_failure", status="failed",
                 failure_kind=failure.get("kind", "external_failure"),
                 failure_detail=failure.get("detail", ""),
                 retryable=bool(failure.get("retryable", False)),
                 exception=None, **common,
             )
+        # Charge the budget and let the driver learn the result exactly as a replay of the
+        # record would, so a live session and one rebuilt from disk cannot diverge.
+        apply_event(campaign, event)
         state = session.state()
         if (outcome == "completed" and campaign.task is not None
                 and campaign.task.succeeded(value) and _accepting(state)):
@@ -637,12 +639,12 @@ def _cancel_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
     else:
         settled, source = declared, "declared_default"
     with campaign.events.acting_as(a["actor"], a["request_id"]):
-        campaign.budget.charge(settled, settle=True)
-        campaign.events.append(
+        event = campaign.events.append(
             "evaluation_cancelled", label=rp["label"], evaluation_id=evaluation_id,
             declared=declared.as_dict(), settled=settled.as_dict(), settled_source=source,
             params=rp["params"], fidelity=rp["fidelity"], reason=a.get("reason", ""),
         )
+        apply_event(campaign, event)
     call.save(session)
     status = _status(cid, session)
     return {"evaluation_id": evaluation_id, "cancelled": True,

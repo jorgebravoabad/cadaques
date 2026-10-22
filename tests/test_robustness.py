@@ -437,3 +437,39 @@ class TestRetryAfterACrashBetweenCommitAndJournal:
                      decision_cost={"seconds": 0.25})
         assert not retry["ok"] and retry["error"]["code"] == "budget_exhausted"
         assert retry["reconstructed"]
+
+
+class TestSettlementFeedsTheDriver:
+    """A live session must learn settled results like a replay of the record does (ADR-0004)."""
+
+    ANNEALED = {
+        "oracle": {"class": "cadaques.oracles.external.ExternalOracle",
+                   "params": {"tariff": {"seconds": 1.0}}},
+        "driver": {"class": "cadaques.drivers.reference.AnnealedLocalDriver",
+                   "params": {"space": BOUNDS}},
+        "budget_total": {"seconds": 1e6},
+        "task": {"bounds": BOUNDS, "direction": "maximize", "fidelities": {},
+                 "success_value": None, "name": "t"},
+        "seed": 3,
+        "meter_driver": False,  # wall-clock metering would make proposals irreproducible
+    }
+
+    def _proposals(self, root, *, fresh_toolbox_per_call):
+        tb = Toolbox(root)
+        assert call(tb, "create_campaign", "mk", spec=self.ANNEALED)["ok"]
+        xs = []
+        for i in range(8):
+            if fresh_toolbox_per_call:
+                tb = Toolbox(root)
+            r = call(tb, "reserve_evaluation", f"r{i}")
+            x = r["result"]["params"]["x"]
+            xs.append(x)
+            assert call(tb, "settle_evaluation", f"s{i}", evaluation_id=r["result"]["evaluation_id"],
+                        outcome="completed", value=-(x - 0.3) ** 2, settled_cost={"seconds": 1.0})["ok"]
+        return xs
+
+    def test_a_live_session_proposes_what_a_session_rebuilt_from_disk_proposes(self, tmp_path):
+        warm = self._proposals(tmp_path / "warm", fresh_toolbox_per_call=False)
+        cold = self._proposals(tmp_path / "cold", fresh_toolbox_per_call=True)
+        assert warm == cold
+        assert len(set(warm)) > 4  # the driver is actually moving
