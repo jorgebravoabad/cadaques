@@ -214,3 +214,51 @@ class TestTornJournalTail:
         assert call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r2", params={"x": 0.6})["ok"]
         again = call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "r1", params={"x": 0.5})
         assert again["replayed"] and not again.get("reconstructed")
+
+
+class TestSettledCostIsRequired:
+    """settle_evaluation used to charge the declared cost when settled_cost was omitted."""
+
+    def _pending(self, tmp_path):
+        tb = Toolbox(tmp_path / "ws")
+        assert call(tb, "create_campaign", "mk", spec=spec(seconds=100.0))["ok"]
+        r = call(tb, "reserve_evaluation", "r1", params={"x": 0.5})
+        return tb, r["result"]["evaluation_id"]
+
+    def test_omission_is_refused_with_a_helpful_message(self, tmp_path):
+        tb, ev = self._pending(tmp_path)
+        before = tb.call("get_campaign_status", {"campaign_id": "c"})["result"]
+        r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="completed", value=1.0)
+        assert not r["ok"] and r["error"]["code"] == "invalid_arguments"
+        assert "settled_cost" in r["error"]["message"] and "actually cost" in r["error"]["message"]
+        assert r["error"]["details"]["field"] == "settled_cost"
+        assert r["error"]["next_actions"] == ["settle_evaluation"]
+        after = tb.call("get_campaign_status", {"campaign_id": "c"})["result"]
+        assert after["n_events"] == before["n_events"] and after["budget"] == before["budget"]
+        assert [p["evaluation_id"] for p in after["pending"]] == [ev]  # still open
+
+    def test_failed_outcomes_must_report_their_cost_too(self, tmp_path):
+        tb, ev = self._pending(tmp_path)
+        r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="failed")
+        assert r["error"]["code"] == "invalid_arguments" and "settled_cost" in r["error"]["message"]
+
+    def test_the_handler_does_not_default_even_if_the_schema_is_bypassed(self, tmp_path):
+        from cadaques.agent import tools as tools_mod
+
+        tb, ev = self._pending(tmp_path)
+        call_ctx = tools_mod._Call(tb, {"campaign_id": "c", "evaluation_id": ev, "outcome": "completed",
+                                         "value": 1.0, "actor": AGENT, "request_id": "s1"})
+        with pytest.raises(tools_mod.ToolError) as err:
+            tools_mod._settle_evaluation(call_ctx)
+        assert err.value.code == "invalid_arguments"
+
+    def test_the_schema_declares_it_required(self, tmp_path):
+        schema = next(t for t in Toolbox(tmp_path / "ws").schemas() if t["name"] == "settle_evaluation")
+        assert "settled_cost" in schema["input_schema"]["required"]
+
+    def test_an_explicit_value_is_recorded_as_reported_and_an_empty_cost_is_a_free_evaluation(self, tmp_path):
+        tb, ev = self._pending(tmp_path)
+        r = call(tb, "settle_evaluation", "s1", evaluation_id=ev, outcome="completed", value=1.0,
+                 settled_cost={})
+        assert r["ok"] and r["result"]["settled_source"] == "reported"
+        assert r["result"]["status"]["budget"]["spent"]["seconds"] == 0.0

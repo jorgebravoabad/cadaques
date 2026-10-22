@@ -218,14 +218,14 @@ class TestSessionCache:
         assert "c" in store._cache
         ev = step(tb, 3, settle=False)
         bad = call(tb, "settle_evaluation", request_id="bad", evaluation_id="ev-999999",
-                   outcome="completed", value=1.0)
+                   outcome="completed", value=1.0, settled_cost={"seconds": 1.0})
         assert bad["error"]["code"] == "unknown_evaluation"
         assert "c" in store._cache  # nothing uncommitted: the session is reused
         ok = call(tb, "settle_evaluation", request_id="good", evaluation_id=ev["evaluation_id"],
-                  outcome="completed", value=0.5)
+                  outcome="completed", value=0.5, settled_cost={"seconds": 1.0})
         assert ok["ok"]
         dup = call(tb, "settle_evaluation", request_id="dup", evaluation_id=ev["evaluation_id"],
-                   outcome="completed", value=0.5)
+                   outcome="completed", value=0.5, settled_cost={"seconds": 1.0})
         assert dup["error"]["code"] == "already_settled"
         assert status(tb)["n_queries"] == 4
 
@@ -326,11 +326,11 @@ class TestIndependentInstances:
             e1["evaluation_id"], e2["evaluation_id"]}
         # b settles a's reservation, a settles b's
         assert call(b, "settle_evaluation", request_id="sb", evaluation_id=e1["evaluation_id"],
-                    outcome="completed", value=1.0)["ok"]
+                    outcome="completed", value=1.0, settled_cost={"seconds": 1.0})["ok"]
         assert call(a, "settle_evaluation", request_id="sa", evaluation_id=e2["evaluation_id"],
-                    outcome="completed", value=2.0)["ok"]
+                    outcome="completed", value=2.0, settled_cost={"seconds": 1.0})["ok"]
         assert call(a, "settle_evaluation", request_id="again", evaluation_id=e1["evaluation_id"],
-                    outcome="completed", value=1.0)["error"]["code"] == "already_settled"
+                    outcome="completed", value=1.0, settled_cost={"seconds": 1.0})["error"]["code"] == "already_settled"
         assert status(b)["pending"] == [] and status(b)["n_queries"] == 2
 
     def test_proposals_continue_the_rng_stream_across_instances(self, tmp_path):

@@ -514,6 +514,21 @@ def _open_reservation(session: Session, evaluation_id: str) -> Event:
     return reservation
 
 
+_SETTLED_COST_HINT = (
+    "settled_cost is required: report what the evaluation actually cost, per currency, e.g. "
+    '{"seconds": 12.5}. CADAQUES no longer assumes the declared cost when it is omitted. '
+    "Pass an empty object ({}) only if the evaluation really cost nothing."
+)
+
+
+def _settled_cost_missing(problems: list[str] | None = None) -> ToolError:
+    details: dict[str, Any] = {"field": "settled_cost"}
+    if problems:
+        details["problems"] = problems
+    return ToolError("invalid_arguments", _SETTLED_COST_HINT, details=details,
+                     next_actions=["settle_evaluation"])
+
+
 def _settle_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
     a = call.args
     cid, evaluation_id = a["campaign_id"], a["evaluation_id"]
@@ -522,10 +537,12 @@ def _settle_evaluation(call: _Call) -> tuple[dict[str, Any], list[str]]:
     reservation = _open_reservation(session, evaluation_id)
     rp = reservation.payload
     declared = Cost.from_dict(rp["declared"])
-    if "settled_cost" in a:
-        settled, source = _cost(a["settled_cost"]), "reported"
-    else:
-        settled, source = declared, "declared_default"
+    # No silent fallback to the declared cost (ADR-0006): settlement is the ex-post
+    # measurement, so the caller must state it. The schema enforces this; the check
+    # is kept so that the handler is safe when called with unvalidated arguments.
+    if "settled_cost" not in a:
+        raise _settled_cost_missing()
+    settled, source = _cost(a["settled_cost"]), "reported"
     outcome = a["outcome"]
     if outcome == "completed" and "value" not in a:
         raise ToolError("invalid_arguments", "A completed evaluation needs a 'value'.",
@@ -720,19 +737,22 @@ TOOLS: tuple[Tool, ...] = (
     ),
     Tool(
         "settle_evaluation",
-        "Report the outcome of a reserved evaluation with its real cost. Settlement is charged "
-        "even if it overruns the budget: the work was done. Failures are results too.",
+        "Report the outcome of a reserved evaluation with its real cost (settled_cost is "
+        "required, there is no default). Settlement is charged even if it overruns the budget: "
+        "the work was done. Failures are results too.",
         _obj({**_CID, **_MUT,
               "evaluation_id": {"type": "string", "minLength": 1},
               "outcome": {"type": "string", "enum": ["completed", "failed"]},
               "value": {"type": "number", "description": "Objective value; required if completed."},
-              "settled_cost": S.COST,
+              "settled_cost": {**S.COST, "description": (
+                  "What the evaluation actually cost, per currency; required. Omitted "
+                  "currencies are zero.")},
               "failure": _obj({"kind": {"type": "string"}, "detail": {"type": "string"},
                                "retryable": {"type": "boolean"}}),
               "timings": {"type": "object", "additionalProperties": {"type": "number"},
                           "description": "Optional breakdown, e.g. queue_seconds, run_seconds."},
               "artifacts": {"type": "array", "items": {"type": "string"}, "maxItems": 100}},
-             _MUT_REQ + ["evaluation_id", "outcome"]),
+             _MUT_REQ + ["evaluation_id", "outcome", "settled_cost"]),
         _out({"evaluation_id": {"type": "string"}, "settled_cost": {"type": "object"},
               "overrun": {"type": "object"}, "status": _STATUS_OUT},
              ["evaluation_id", "settled_cost", "status"]),
@@ -802,6 +822,8 @@ class Toolbox:
                                 next_actions=["describe_capabilities"])
             problems = S.validate(args, tool.input_schema)
             if problems:
+                if name == "settle_evaluation" and "/settled_cost: required" in problems:
+                    raise _settled_cost_missing(problems)
                 raise ToolError("invalid_arguments", "Arguments do not match the tool schema.",
                                 details={"problems": problems, "input_schema": tool.input_schema},
                                 next_actions=[name])

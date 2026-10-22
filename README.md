@@ -200,6 +200,10 @@ tb.call("settle_evaluation", {"campaign_id": "pc1d", "actor": me, "request_id": 
                               "artifacts": ["slurm:123456"]})
 ```
 
+`settled_cost` is required: settlement is the measurement, and the kernel never
+assumes the declared price in its place (omitting it is an `invalid_arguments`
+error that says so).
+
 Every response is an envelope (`ok`, `result` or a structured `error` with
 `retryable` and `next_actions`). Admission counts outstanding reservations, so
 concurrent operators cannot overspend; failures and cancellations are still

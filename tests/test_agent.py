@@ -205,7 +205,7 @@ class TestResume:
         a("create_campaign", spec=external_spec())
         ev = a("reserve_evaluation")["result"]["evaluation_id"]
         b = Agent(Toolbox(tmp_path / "ws"), actor=HUMAN)  # fresh process, other operator
-        assert b("settle_evaluation", evaluation_id=ev, outcome="completed", value=1.0)["ok"]
+        assert b("settle_evaluation", evaluation_id=ev, outcome="completed", value=1.0, settled_cost={"seconds": 10.0})["ok"]
         events = b("get_events")["result"]["events"]
         assert events[-1]["actor"] == HUMAN
 
@@ -244,7 +244,7 @@ class TestBudgetAuthority:
     def test_exhaustion_without_pending_work_stops_the_campaign(self, agent):
         agent("create_campaign", spec=external_spec(seconds=15.0))
         ev = agent("reserve_evaluation")["result"]["evaluation_id"]
-        agent("settle_evaluation", evaluation_id=ev, outcome="completed", value=0.5)
+        agent("settle_evaluation", evaluation_id=ev, outcome="completed", value=0.5, settled_cost={"seconds": 10.0})
         assert agent("reserve_evaluation")["error"]["code"] == "budget_exhausted"
         status = agent("get_campaign_status")["result"]
         assert status["stop_reason"] == "budget_exhausted" and not status["accepting_reservations"]
@@ -306,10 +306,10 @@ class TestLifecycle:
         agent("create_campaign", spec=external_spec(success=0.9))
         e1 = agent("reserve_evaluation")["result"]["evaluation_id"]
         e2 = agent("reserve_evaluation")["result"]["evaluation_id"]
-        agent("settle_evaluation", evaluation_id=e1, outcome="completed", value=0.95)
+        agent("settle_evaluation", evaluation_id=e1, outcome="completed", value=0.95, settled_cost={"seconds": 10.0})
         assert agent("get_campaign_status")["result"]["stop_reason"] == "success"
         assert agent("reserve_evaluation")["error"]["code"] == "campaign_stopped"
-        assert agent("settle_evaluation", evaluation_id=e2, outcome="completed", value=0.2)["ok"]
+        assert agent("settle_evaluation", evaluation_id=e2, outcome="completed", value=0.2, settled_cost={"seconds": 10.0})["ok"]
 
     def test_stop_is_idempotent(self, agent):
         agent("create_campaign", spec=external_spec())
@@ -344,7 +344,7 @@ class TestKernelEquivalence:
         agent("create_campaign", spec=external_spec())
         e1 = agent("reserve_evaluation")["result"]["evaluation_id"]
         e2 = agent("reserve_evaluation")["result"]["evaluation_id"]
-        agent("settle_evaluation", evaluation_id=e1, outcome="completed", value=0.7)
+        agent("settle_evaluation", evaluation_id=e1, outcome="completed", value=0.7, settled_cost={"seconds": 10.0})
         agent("cancel_evaluation", evaluation_id=e2)
         path = tb.store.path("c")
         state = replay(CampaignSpec.load(path / "spec.json"), path / "events.jsonl")
@@ -360,7 +360,7 @@ class TestAttribution:
     def test_every_tool_event_names_actor_and_request(self, agent):
         agent("create_campaign", spec=external_spec())
         ev = agent("reserve_evaluation", request_id="r-9")["result"]["evaluation_id"]
-        agent("settle_evaluation", request_id="s-9", evaluation_id=ev, outcome="completed", value=1.0)
+        agent("settle_evaluation", request_id="s-9", evaluation_id=ev, outcome="completed", value=1.0, settled_cost={"seconds": 10.0})
         events = agent("get_events")["result"]["events"]
         assert all(e["actor"] == AGENT and e["request_id"] for e in events)
         assert {e["request_id"] for e in events if e["kind"] == "evaluation_reserved"} == {"r-9"}
