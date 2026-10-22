@@ -162,6 +162,26 @@ def event_from_dict(raw: Mapping[str, Any]) -> Event:
     )
 
 
+def _incomplete_call(events: list[Event]) -> int | None:
+    """Index of the first event of an unfinished multi-event call at the end of ``events``.
+
+    A call that commits several events stamps the first with ``call_events``, how
+    many it wrote in one append. If the log ends inside such a call (the append was
+    cut short by a crash, so only some of its events reached the disk), the call is
+    not committed: neither its complete head lines nor anything after them count.
+    """
+    if not events or events[-1].request_id is None:
+        return None
+    rid = events[-1].request_id
+    i = len(events) - 1
+    while i > 0 and events[i - 1].request_id == rid and "call_events" not in events[i].payload:
+        i -= 1
+    declared = events[i].payload.get("call_events")
+    if events[i].request_id == rid and declared is not None and len(events) - i < declared:
+        return i
+    return None
+
+
 def read_events_from(
     path: str | Path, offset: int = 0, expected_seq: int = 0,
     spans: list[tuple[int, int]] | None = None,
@@ -172,16 +192,18 @@ def read_events_from(
     position just past the last event read (``offset`` if there is none) and
     ``last_line`` the raw bytes of that event (``b""`` if none). A log is a
     sequence of newline-terminated lines; an unterminated final fragment that
-    does not parse is a torn append and is left unread, so ``end_offset`` is
-    always a commit boundary. Sequence numbers must run on from ``expected_seq``.
-    If ``spans`` is given, the ``(start, end)`` byte range of every event read is
-    appended to it, in order.
+    does not parse is a torn append and is left unread, and so are the events of
+    an unfinished multi-event call before it (see :func:`_incomplete_call`), so
+    ``end_offset`` is always a commit boundary. Sequence numbers must run on from
+    ``expected_seq``. If ``spans`` is given, the ``(start, end)`` byte range of
+    every event read is appended to it, in order.
     """
     with Path(path).open("rb") as fh:
         fh.seek(offset)
         data = fh.read()
     events: list[Event] = []
-    pos, last = 0, b""
+    bounds: list[tuple[int, int]] = []
+    pos = 0
     while pos < len(data):
         nl = data.find(b"\n", pos)
         end = nl + 1 if nl != -1 else len(data)
@@ -198,8 +220,13 @@ def read_events_from(
                     f"Event log corrupt: seq {event.seq} at position {expected_seq + len(events)}"
                 )
             events.append(event)
-            if spans is not None:
-                spans.append((offset + pos, offset + end))
-            last = line
+            bounds.append((pos, end))
         pos = end
+    unfinished = _incomplete_call(events)
+    if unfinished is not None:
+        pos = bounds[unfinished][0]
+        events, bounds = events[:unfinished], bounds[:unfinished]
+    if spans is not None:
+        spans.extend((offset + a, offset + b) for a, b in bounds)
+    last = data[bounds[-1][0]:bounds[-1][1]] if bounds else b""
     return events, offset + pos, last

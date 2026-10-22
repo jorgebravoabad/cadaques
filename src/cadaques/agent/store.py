@@ -44,7 +44,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterator, Mapping
+from typing import TYPE_CHECKING, Any, Iterator, Mapping, cast
 
 from ..core.events import Event, EventLog, event_from_dict, event_line, read_events_from
 from ..core.fsio import write_atomic
@@ -596,6 +596,10 @@ class CampaignStore:
             session.offset = path.stat().st_size
             start = 0
         elif new:
+            if len(new) > 1:
+                # One append can reach the disk in part after a crash (power loss). Say how many
+                # events this call wrote, so that a reader can tell it was cut short (ADR-0016).
+                cast("dict[str, Any]", new[0].payload)["call_events"] = len(new)
             lines = [event_line(e) for e in new]
             size = path.stat().st_size
             if size < session.offset:

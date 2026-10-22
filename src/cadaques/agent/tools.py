@@ -34,7 +34,7 @@ import math
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping, cast
 
 from .. import __version__
 from ..core.cost import CURRENCIES, Cost
@@ -235,7 +235,7 @@ def _refuse(call: _Call, session: Session, err: ToolError) -> ToolError:
     events = session.campaign.events.events
     request_id = call.args["request_id"]
     if events and events[-1].request_id == request_id:
-        events[-1].payload["refusal"] = err.as_dict()
+        cast("dict[str, Any]", events[-1].payload)["refusal"] = err.as_dict()
     call.save(session)
     return err
 
@@ -899,7 +899,7 @@ class Toolbox:
                 # request_id, so a request_id the record has never seen cannot be in the journal
                 # (and the journal is not read at all on the common path).
                 committed = session.events_for(request_id) if session is not None else []
-                if committed:
+                if session is not None and committed:
                     prior = self.store.journal_lookup(cid, request_id)
                     if prior is not None:
                         if prior["args_sha256"] != digest:

@@ -473,3 +473,85 @@ class TestSettlementFeedsTheDriver:
         cold = self._proposals(tmp_path / "cold", fresh_toolbox_per_call=True)
         assert warm == cold
         assert len(set(warm)) > 4  # the driver is actually moving
+
+
+class TestACutShortAppendIsNotACommit:
+    """After a power loss one append may be on the disk in part; a call is committed all or nothing."""
+
+    def _setup(self, tmp_path, tool="reserve_evaluation", **args):
+        tb = Toolbox(tmp_path / "ws")
+        assert call(tb, "create_campaign", "mk", spec=spec(seconds=100.0))["ok"]
+        assert call(tb, "reserve_evaluation", "p1", params={"x": 0.1})["ok"]
+        log = tmp_path / "ws" / "c" / "events.jsonl"
+        before = log.read_bytes()
+        first = call(tb, tool, "T", **args)
+        return tb, log, before, first
+
+    def _cut(self, log, before, keep_lines, frac):
+        """Keep ``keep_lines`` whole lines of the last call and ``frac`` of the next one."""
+        lines = log.read_bytes()[len(before):].splitlines(keepends=True)
+        tail = lines[keep_lines][: int(len(lines[keep_lines]) * frac)] if frac else b""
+        log.write_bytes(before + b"".join(lines[:keep_lines]) + tail)
+        journal = log.with_name("requests.jsonl")
+        kept = journal.read_bytes().splitlines(keepends=True)[:-1]  # the call never journaled
+        journal.write_bytes(b"".join(kept))
+
+    @pytest.mark.parametrize("keep_lines, frac", [(1, 0.0), (1, 0.5)], ids=["at-a-line-boundary", "mid-line"])
+    def test_a_two_event_call_cut_short_is_not_half_applied(self, tmp_path, keep_lines, frac):
+        _, log, before, first = self._setup(tmp_path, params={"x": 0.4}, decision_cost={"seconds": 0.25})
+        assert first["ok"]
+        self._cut(log, before, keep_lines, frac)
+        fresh = Toolbox(tmp_path / "ws")
+        status = fresh.call("get_campaign_status", {"campaign_id": "c"})["result"]
+        assert status["n_events"] == 3  # started, p1's proposal and reservation: nothing of the cut call
+        assert status["budget"]["spent"]["seconds"] == 0.0 and len(status["pending"]) == 1
+        retry = call(fresh, "reserve_evaluation", "T", params={"x": 0.4}, decision_cost={"seconds": 0.25})
+        assert retry["ok"] and "reconstructed" not in retry  # it ran, in full, because nothing was committed
+        assert retry["result"]["evaluation_id"] == first["result"]["evaluation_id"]
+        assert [e.seq for e in EventLogReader(log)] == list(range(5))
+        assert fresh.call("get_campaign_status", {"campaign_id": "c"})["result"]["budget"]["spent"][
+            "seconds"] == 0.25
+
+    def test_the_same_holds_for_a_new_process_starting_from_the_snapshot(self, tmp_path):
+        _, log, before, first = self._setup(tmp_path, params={"x": 0.4})
+        self._cut(log, before, 1, 0.0)
+        # the snapshot written by the cut call covers events that are no longer committed
+        retry = call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "T", params={"x": 0.4})
+        assert retry["ok"] and retry["result"]["evaluation_id"] == first["result"]["evaluation_id"]
+        assert len(EventLogReader(log)) == 5
+
+    def test_a_many_event_call_cut_short_is_not_committed(self, tmp_path):
+        tb = Toolbox(tmp_path / "ws")
+        assert call(tb, "create_campaign", "mk", spec=_ising())["ok"]
+        log = tmp_path / "ws" / "c" / "events.jsonl"
+        before = log.read_bytes()
+        assert call(tb, "run_campaign", "T", max_new_queries=3)["ok"]
+        self._cut(log, before, 4, 0.5)
+        status = Toolbox(tmp_path / "ws").call("get_campaign_status", {"campaign_id": "c"})["result"]
+        assert status["n_events"] == 1 and status["n_queries"] == 0
+
+    def test_complete_calls_and_logs_without_the_stamp_are_unaffected(self, tmp_path):
+        from cadaques.core.events import read_events_from
+
+        tb, log, before, first = self._setup(tmp_path, params={"x": 0.4})
+        assert len(read_events_from(log)[0]) == 5
+        lines = [json.loads(line) for line in log.read_text().splitlines()]
+        for line in lines:  # as written by 0.4.0: no stamp
+            line["payload"].pop("call_events", None)
+        log.write_text("".join(json.dumps(line) + "\n" for line in lines[:-1]) + json.dumps(lines[-1])[:20])
+        assert len(read_events_from(log)[0]) == 4  # only the torn fragment is dropped, as before
+
+    def test_a_writer_removes_the_cut_call_before_appending(self, tmp_path):
+        tb, log, before, _ = self._setup(tmp_path, params={"x": 0.4})
+        self._cut(log, before, 1, 0.5)
+        other = call(Toolbox(tmp_path / "ws"), "reserve_evaluation", "other", params={"x": 0.9})
+        assert other["ok"]
+        events = EventLogReader(log)
+        assert [e.seq for e in events] == list(range(5))
+        assert [e.request_id for e in events][-2:] == ["other", "other"]
+
+
+def EventLogReader(path):
+    from cadaques import EventLog
+
+    return EventLog.from_jsonl(path)
