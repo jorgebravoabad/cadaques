@@ -23,6 +23,6 @@ def test_citation_cff_matches_module():
     cff = ROOT / "CITATION.cff"
     if not cff.exists():
         pytest.skip("CITATION.cff not available (not a source checkout)")
-    match = re.search(r"^version:\s*['\"]?([^'\"\s]+)['\"]?\s*$", cff.read_text(encoding="utf-8"), re.M)
+    match = re.search(r"^version:\s*['\"]?([^'\"\s]+)['\"]?\s*$", cff.read_text(encoding="utf-8"), re.MULTILINE)
     assert match is not None
     assert match.group(1) == cadaques.__version__

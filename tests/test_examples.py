@@ -24,5 +24,5 @@ def test_examples_exist():
 def test_example_runs(script):
     if script.name in NEEDS_BO and importlib.util.find_spec("sklearn") is None:
         pytest.skip("needs the [bo] extra (scikit-learn)")
-    done = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, timeout=120)
+    done = subprocess.run([sys.executable, str(script)], check=False, capture_output=True, text=True, timeout=120)
     assert done.returncode == 0, done.stderr[-2000:]
