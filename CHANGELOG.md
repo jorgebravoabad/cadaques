@@ -11,9 +11,11 @@ A packaging and documentation patch release (ADR-0010: no new public API, no
 behaviour change in the kernel), prompted by reviewer feedback on 0.4.1.
 
 ### Added
-- **Examples runnable from a clone**: `examples/pc1d.py` (the in-process
-  Oracle of the SoftwareX article's Listing 1, a short budgeted campaign
-  printing declared against settled spend; needs the `[bo]` extra) and
+- **Examples runnable from a clone**: `examples/listing_oracle.py` (Listing 1
+  of the SoftwareX article, verbatim: a user's simulation as an in-process
+  Oracle run by the shipped GP-EI driver), `examples/pc1d.py` (the same
+  pattern on a one-dimensional photonic crystal, printing declared against
+  settled spend; both need the `[bo]` extra) and
   `examples/external_reserve_settle.py` (an `ExternalOracle` campaign operated
   through the agent `Toolbox`: reserve, a simulated external job whose
   settled cost differs from the declaration, settle, ledger). New

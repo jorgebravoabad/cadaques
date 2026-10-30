@@ -20,10 +20,16 @@ by the test suite (``tests/test_examples.py``).
    * - ``chemistry_recommend.py``
      - The chemistry vertical: ranking candidates with ``recommend``.
      - ``cadaques[bo]``
+   * - ``listing_oracle.py``
+     - Listing 1 of the SoftwareX article: your own simulation as an
+       in-process Oracle (``price()`` declares the cost, ``evaluate()``
+       returns the result with its measured cost), run by the shipped
+       Gaussian-process driver; prints the stop reason, the spend and the
+       planner's share of it.
+     - ``cadaques[bo]``
    * - ``pc1d.py``
-     - An in-process Oracle of your own (Listing 1 of the SoftwareX article):
-       ``price()`` declares the cost, ``evaluate()`` returns the result with
-       its measured cost; a budgeted campaign prints declared against settled
+     - A one-dimensional photonic crystal (a quarter-wave stack) as an
+       in-process Oracle; a budgeted campaign prints declared against settled
        spend and the best point.
      - ``cadaques[bo]``
    * - ``external_reserve_settle.py``
@@ -32,6 +38,13 @@ by the test suite (``tests/test_examples.py``).
        job, settle with the measured cost). See
        :doc:`howto_external`.
      - core
+
+``listing_oracle.py``
+---------------------
+
+.. literalinclude:: ../examples/listing_oracle.py
+   :language: python
+   :start-after: # ---- quoted in the article from here
 
 ``pc1d.py``
 -----------

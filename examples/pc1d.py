@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
-"""An in-process Oracle: the article's Listing 1, on a one-dimensional photonic crystal.
+"""An in-process Oracle of your own, on a one-dimensional photonic crystal (the pattern of the article's Listing 1).
 
 A stack of two dielectrics (eps_h, eps_l); the query parameter ``d_H`` is
 the fraction of the unit cell filled by the high-index layer, and the

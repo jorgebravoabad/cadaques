@@ -12,12 +12,12 @@ from pathlib import Path
 import pytest
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
-NEEDS_BO = {"pc1d.py", "chemistry_recommend.py"}  # examples that need the [bo] extra (scikit-learn)
+NEEDS_BO = {"listing_oracle.py", "pc1d.py", "chemistry_recommend.py"}  # examples that need the [bo] extra (scikit-learn)
 SCRIPTS = sorted(EXAMPLES.glob("*.py"))
 
 
 def test_examples_exist():
-    assert {"pc1d.py", "external_reserve_settle.py"} <= {p.name for p in SCRIPTS}
+    assert {"listing_oracle.py", "pc1d.py", "external_reserve_settle.py"} <= {p.name for p in SCRIPTS}
 
 
 @pytest.mark.parametrize("script", SCRIPTS, ids=lambda p: p.name)
