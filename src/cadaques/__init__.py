@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """CADAQUES — Cost-Aware Dual Architecture for QUery-Efficient diScovery.
 
 An open-source framework for autonomous discovery campaigns:

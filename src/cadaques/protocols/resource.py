@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The :class:`Resource` protocol: operational science (ADR-0003).
 
 The dual architecture, made code. :class:`~cadaques.protocols.oracle.Oracle`

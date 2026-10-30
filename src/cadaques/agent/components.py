@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Which participants a tool call may name, and how to describe them.
 
 ``CampaignSpec.build`` imports a dotted path and instantiates it. That

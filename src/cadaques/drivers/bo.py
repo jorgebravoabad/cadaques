@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Cost-aware Bayesian optimization behind ``pip install cadaques[bo]``.
 
 The reference intelligent driver: a Gaussian-process surrogate with

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Every script in examples/ runs from a clone and exits cleanly."""
 
 from __future__ import annotations

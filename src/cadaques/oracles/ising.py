@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Canonical illustrative oracle: the two-dimensional Ising model.
 
 The campaign it supports is a textbook discovery task with an exact

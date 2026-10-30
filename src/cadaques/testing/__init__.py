@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Conformance checks for CADAQUES participants.
 
 Contract testing outranks line coverage (three-year strategy, §8):

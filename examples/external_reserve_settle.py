@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Running evaluations outside the process: reserve, run, settle.
 
 An ``ExternalOracle`` is only a price model: the kernel declares what an

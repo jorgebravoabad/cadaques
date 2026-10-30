@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The :class:`Oracle` protocol: anything that answers queries at a price."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The workspace: campaigns that outlive the session that started them.
 
 Every campaign lives in its own directory under a workspace root::

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 from .analytic import AnalyticOracle, quadratic_bowl
 from .dataset import DatasetOracle
 from .external import ExternalEvaluation, ExternalOracle

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The campaign ledger: every transaction, declared and settled.
 
 The ledger is the accounting record of a discovery campaign and,

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Task, SearchSpace and constraint semantics (0.2 kernel)."""
 
 from __future__ import annotations

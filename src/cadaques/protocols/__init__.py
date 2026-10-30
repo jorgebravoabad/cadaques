@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Contracts of the dual architecture: Driver, Oracle (and, next, Resource, Executor)."""
 
 from .driver import Driver

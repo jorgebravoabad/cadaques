@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Every shipped participant passes the public conformance suites."""
 
 from __future__ import annotations

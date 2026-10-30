@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Analytic oracles: exact functions with synthetic cost models.
 
 Useful for unit tests and for controlled driver-benchmarking

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Release 0.4.1 hardening: defects found by the kernel validation, one class per defect.
 
 Each test failed on 0.4.0 / the ADR-0015 branch and states the guarantee the

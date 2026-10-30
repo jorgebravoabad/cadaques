@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Event-sourced runtime: log, derived ledger, failures, rejections (0.2)."""
 
 from __future__ import annotations
