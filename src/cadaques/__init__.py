@@ -23,7 +23,7 @@ from .protocols.driver import Driver
 from .protocols.oracle import Oracle
 from .protocols.resource import JobHandle, JobStatus, OracleResource, Resource
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 __all__ = [
     "Budget", "BudgetExceeded", "BudgetView", "Campaign", "CampaignResult", "CampaignSpec", "SpecError",
