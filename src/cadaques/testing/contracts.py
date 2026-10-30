@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Reusable conformance suites for the three participant contracts.
 
 Each check takes a *factory* (a zero-argument callable returning a

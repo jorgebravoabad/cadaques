@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Derived campaign state: a pure fold over the event log (ADR-0004).
 
 :class:`CampaignState` holds nothing the events cannot reconstruct;

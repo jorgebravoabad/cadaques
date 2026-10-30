@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Reference drivers. BayesianDriver requires the [bo] extra and is
 imported lazily so core installs stay light (ADR-0008)."""
 

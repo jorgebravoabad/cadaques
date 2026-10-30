@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Recommendation mode: from a measured table to the next experiments.
 
 Campaign mode replays or executes queries one at a time; *recommendation

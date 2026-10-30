@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """``cadaques-agent``: the tool surface as a JSON command line.
 
 For agents that operate through a shell rather than MCP::

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Derived-state snapshots and session caching (ADR-0015): one test class per guarantee.
 
 The event log stays the source of truth; every cached or snapshotted form of

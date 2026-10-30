@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """A new process starts from the persisted snapshot, not from a replay (ADR-0016).
 
 The event log stays the source of truth. A snapshot and a request index are

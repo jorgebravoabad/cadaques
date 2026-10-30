@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The agent-first surface (ADR-0013/0014): one test class per guarantee."""
 
 from __future__ import annotations

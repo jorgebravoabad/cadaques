@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """CampaignSpec: declarative round-trip of campaign definitions (0.2, A1)."""
 
 from __future__ import annotations

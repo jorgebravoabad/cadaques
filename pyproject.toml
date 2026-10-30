@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cadaques"
-version = "0.4.1"
+dynamic = ["version"]
 description = "Cost-Aware Dual Architecture for QUery-Efficient diScovery: autonomous discovery campaigns — any oracle, any driver, one budget."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,6 +16,10 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = ["numpy>=1.24"]
@@ -34,6 +38,9 @@ Repository = "https://github.com/jorgebravoabad/cadaques"
 Changelog = "https://github.com/jorgebravoabad/cadaques/blob/main/CHANGELOG.md"
 Paper = "https://arxiv.org/abs/2607.16127"
 Issues = "https://github.com/jorgebravoabad/cadaques/issues"
+
+[tool.hatch.version]
+path = "src/cadaques/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cadaques"]

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Compatibility shim (0.1 layout). Canonical home since 0.2: ``cadaques.runtime.campaign``."""
 
 from ..runtime.campaign import Campaign, CampaignResult, DriverStopped

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The :class:`ExternalDriver`: the operator proposes, not the kernel.
 
 In an agent-operated campaign the next point may come from the agent

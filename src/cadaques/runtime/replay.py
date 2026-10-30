@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Replay and resume: the campaign as a durable object (ADR-0004/0012).
 
 Two guarantees, both tested in CI:

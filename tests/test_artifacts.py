@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 from __future__ import annotations
 
 from cadaques.core.artifacts import ArtifactRef, store_artifact

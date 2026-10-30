@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Structured errors: every failure says what the caller can do next.
 
 A traceback is written for a person reading a terminal. An agent needs

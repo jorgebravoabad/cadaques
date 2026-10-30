@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The :class:`ExternalOracle`: work the kernel prices but does not run.
 
 In an agent-operated campaign (ADR-0014) the evaluation happens outside

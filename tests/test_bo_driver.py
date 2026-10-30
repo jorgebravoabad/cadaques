@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Cost-aware Bayesian driver: contract, learning, and economics."""
 
 from __future__ import annotations

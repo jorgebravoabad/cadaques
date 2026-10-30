@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The campaign event log: the source of truth (ADR-0004).
 
 Every meaningful transition of a campaign — start, driver proposal,

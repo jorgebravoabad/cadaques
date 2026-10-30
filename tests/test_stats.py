@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """cadaques.stats: the one audited comparison module (A3)."""
 
 from __future__ import annotations
