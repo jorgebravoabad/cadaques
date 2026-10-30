@@ -8,16 +8,104 @@
 
 *An open-source framework for autonomous discovery campaigns: any oracle, any driver, one budget.*
 
-CADAQUES decouples autonomous discovery into two symmetric protocols. A metered
-**Oracle** abstracts anything that answers queries at a price — a simulator, a
-laboratory instrument, an analytic function. A **Driver** abstracts anything that
-decides what to ask next — random search, Bayesian optimization, gradient methods,
-LLM agents. Between them sits the framework's one structural commitment: **cost is
-a first-class primitive**. Every oracle query and every driver decision is priced
-in heterogeneous currencies (wall time, CPU hours, euros, tokens) and charged
-against a single campaign budget. Campaigns end when the budget is exhausted, not
-when an iteration counter runs out, and all results are reported as performance
-per unit cost. *Every query counts.*
+## CADAQUES in one sentence
+
+CADAQUES is a small Python kernel that sits between whatever proposes experiments
+(a Bayesian optimizer, a script, an AI agent) and whatever runs them (a simulation,
+a cluster job, an instrument). It **keeps the books**: every euro, core-second or
+token spent goes on one budget and one permanent record.
+
+### The problem it solves
+
+A discovery campaign spends something real, like core-hours on a shared cluster.
+Most optimization software ignores that. It counts evaluations ("stop after 50"),
+or trusts a cost model it never checks, or stops when a clock runs out without
+counting jobs still running. But the cost of an evaluation is only known after it
+runs, and it is often not what you expected. In our cluster runs, one batch of jobs
+was charged 50–65% more than declared because the scheduler placed them on nodes
+that billed double.
+
+### The cast
+
+- **Oracle**: the thing that evaluates. Two methods: `price(query)` says what an
+  evaluation should cost; `evaluate(query)` runs it and reports what it did cost.
+- **Driver**: the thing that proposes the next query (random search, GP-EI, a
+  multi-fidelity method). It sees the history and a read-only view of the budget,
+  so it can adapt to the budget but cannot change the books.
+- **Campaign**: the kernel itself. It admits, charges and records.
+- **Budget**: limits in up to four currencies: `seconds`, `cpu_hours`, `euros`, `tokens`.
+- **Event log**: an append-only file. Every state of the campaign is derived from it.
+- **Operator**: a person, a program or an agent who drives the campaign through
+  11 tools (from Python, the command line or MCP).
+
+### The life of one evaluation
+
+A real example: a photonic-crystal campaign on Slurm with a budget of 240 core-seconds.
+
+1. **Declare the campaign.** A `CampaignSpec` (JSON) names the Oracle, the Driver,
+   the budget, the task and a random seed. Everything that follows is reproducible
+   from this plus the log.
+2. **The Driver proposes.** It suggests a design: radius r = 0.48284, at high
+   resolution (64). The kernel times this `propose` call, and that thinking time is
+   charged to the budget too. Planning is not free, and in some regimes it is a
+   large share of the spend.
+3. **The Oracle prices it.** The declared cost is d = 14.52 core-seconds. This
+   number is fixed before anything runs.
+4. **Admission check.** The kernel computes S + R + d ≤ B for every capped currency,
+   with S the settled spend so far (finished jobs, failures, planning), R the
+   declared cost of jobs still running, and B the budget. If it fits, the
+   evaluation is admitted; if not, it is refused, and the refusal itself is
+   recorded. This is the hold-and-charge rule of HPC allocation managers, applied
+   inside the planning loop.
+5. **Reserve.** An `evaluation_reserved` event is appended to the log, and R grows
+   by 14.52. The money is now committed, even though nothing has been spent yet.
+6. **Run.** In-process, the Oracle just evaluates. On a cluster, the operator
+   submits the job with `sbatch` and waits for `sacct` to report final accounting.
+7. **Settle.** The job reports `CPUTimeRAW` = 24 core-seconds. The operator calls
+   `settle_evaluation` with that cost and the measured band gap. A result event is
+   appended: R shrinks by 14.52 and S grows by 24. The overrun (24 − 14.52) is kept
+   on the record beside the declaration.
+8. **Repeat** until no declared cost fits in the remaining budget. Then the campaign stops.
+
+### What makes it robust
+
+Every mutating call carries a request id and an actor. The kernel writes the event
+to the log before recording its response. If the process crashes in between and
+the operator retries, the kernel rebuilds the answer from the log instead of
+reserving twice. A repeated settlement is recognized and adds nothing. This matters
+most when the operator is an AI agent that may retry, time out or lose its session.
+
+### What the log gives you
+
+Because the log is the campaign:
+
+- **Replay**: rebuild the exact final state from spec + log, without re-running anything.
+- **Checkpoint and resume**: a new process continues exactly where the old one
+  stopped, random-number streams included (exactly, when planning is not metered by
+  wall time).
+- **Audit**: who did what, when, at what declared and settled cost.
+- **Counterfactuals**: replay the recorded operator with a different admission rule
+  and see what would have happened. That is how we showed that trusting declared
+  costs would have left 78% of campaigns more than 10% over budget, against 30%
+  with the kernel's rule.
+
+### What it promises, and what it doesn't
+
+- **Promises**: the books are consistent with the costs they are given. Overspending
+  is bounded: a campaign can exceed B only by the overruns of jobs in flight at its
+  last admission, plus the cost of proposals refused afterwards. That bound held in
+  all 790 cluster campaigns.
+- **Doesn't promise**: that a reported cost is true. If an agent reports the wrong
+  number, the kernel records the wrong number. It also doesn't kill an overrunning
+  job; it lets it finish and records the overrun, so the result isn't lost.
+- **Isn't**: a workflow system (it doesn't stage data or write job scripts) or an
+  optimizer (the Drivers are pluggable).
+
+### The short version
+
+Propose, price, check that it fits, reserve, run, settle, record. Then repeat. It's
+basic budget accounting, but placed inside the discovery loop, charging the planner
+as well as the experiments, and keeping cost and scientific result on the same record.
 
 ## Installation
 
