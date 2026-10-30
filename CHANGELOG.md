@@ -5,6 +5,38 @@ the pre-1.0 stability policy. The claim of record is the latest tag.
 Concept DOI, resolving to the latest version:
 [10.5281/zenodo.21293588](https://doi.org/10.5281/zenodo.21293588).
 
+## [0.4.2] — unreleased
+
+A packaging and documentation patch release (ADR-0010: no new public API, no
+behaviour change in the kernel), prompted by reviewer feedback on 0.4.1.
+
+### Added
+- **Examples runnable from a clone**: `examples/pc1d.py` (the in-process
+  Oracle of the SoftwareX article's Listing 1, a short budgeted campaign
+  printing declared against settled spend; needs the `[bo]` extra) and
+  `examples/external_reserve_settle.py` (an `ExternalOracle` campaign operated
+  through the agent `Toolbox`: reserve, a simulated external job whose
+  settled cost differs from the declaration, settle, ledger). New
+  `tests/test_examples.py` runs every script in `examples/` in a subprocess.
+- **Documentation**: the how-to "Running evaluations outside the process"
+  (`ExternalOracle` as a price model, the reserve, run, settle cycle through
+  the Python tools and `cadaques-agent call`, settling from Slurm accounting,
+  why `settled_cost` should always be passed, idempotent request ids and
+  retrying after a crash) and an Examples page; the `BayesianDriver` API is
+  now part of the API reference.
+
+### Changed
+- **Single-sourced version**: `cadaques.__version__` is the only place the
+  version is written in code; `pyproject.toml` reads it (hatch dynamic
+  version). `tests/test_version.py` checks that the installed metadata and
+  `CITATION.cff` agree with it.
+- **Docs build** on Read the Docs now installs the `docs` and `bo` extras so
+  the `BayesianDriver` reference renders.
+- **CI** tests Python 3.13 as well; package classifiers list Python 3.10 to
+  3.13.
+- **SPDX headers** (`SPDX-License-Identifier: MIT` and copyright) on every
+  Python file under `src/`, `examples/` and `tests/`.
+
 ## [0.4.1] — 2026-10 — DOI: [10.5281/zenodo.23563602](https://doi.org/10.5281/zenodo.23563602)
 
 A hardening release of the agent surface. The kernel validation of 0.4.0

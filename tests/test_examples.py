@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
-NEEDS_BO = {"pc1d.py"}  # examples that need the [bo] extra (scikit-learn)
+NEEDS_BO = {"pc1d.py", "chemistry_recommend.py"}  # examples that need the [bo] extra (scikit-learn)
 SCRIPTS = sorted(EXAMPLES.glob("*.py"))
 
 
