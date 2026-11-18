@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Campaign-level seed streams (ADR-0012)."""
 
 from __future__ import annotations

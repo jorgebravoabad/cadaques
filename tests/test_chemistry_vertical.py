@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The chemistry vertical: roles in, kernel objects and rankings out."""
 
 from __future__ import annotations

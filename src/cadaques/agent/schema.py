@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """JSON Schema fragments and a small validator for tool arguments.
 
 Tool inputs and outputs are described in JSON Schema (draft 2020-12),

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Cost primitives: the first-class citizens of CADAQUES.
 
 Every oracle query and every driver decision is priced in a

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """General envelopes and failure semantics of the campaign loop.
 
 :class:`Action` and :class:`Observation` are the general request and

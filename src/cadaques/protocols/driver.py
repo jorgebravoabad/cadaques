@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The :class:`Driver` protocol: anything that decides what to ask next."""
 
 from __future__ import annotations

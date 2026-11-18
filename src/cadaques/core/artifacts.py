@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Artifact references: large outputs live outside the event log.
 
 An :class:`ArtifactRef` is a small, serializable pointer — content

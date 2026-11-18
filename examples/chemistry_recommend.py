@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The first vertical, end to end: a reaction CSV in, ranked experiments out.
 
 A chemist's table — composition descriptors, reaction conditions, a

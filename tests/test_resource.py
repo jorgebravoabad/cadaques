@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Resource protocol and the OracleResource adapter (ADR-0003)."""
 
 from __future__ import annotations

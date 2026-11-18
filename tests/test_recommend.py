@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Recommendation mode: ranked, seeded, provenanced, metered (0.3b)."""
 
 from __future__ import annotations

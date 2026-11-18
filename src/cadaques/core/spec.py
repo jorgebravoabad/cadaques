@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The :class:`CampaignSpec`: the declarative definition of a campaign.
 
 The event log records what *happened*; the spec declares what was

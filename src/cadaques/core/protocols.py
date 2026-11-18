@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Compatibility shim (0.1 layout). Canonical homes since 0.2:
 
 * :class:`Query`, :class:`Result` -> ``cadaques.core.records``

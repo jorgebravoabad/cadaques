@@ -31,6 +31,8 @@ Installation
 
    quickstart
    concepts
+   howto_external
+   examples
 
 .. toctree::
    :maxdepth: 2

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The :class:`Task`: the scientific problem, without the method.
 
 A Task declares *what* is sought — variables, direction, constraints,

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Canonical CADAQUES campaign: locate the Ising critical temperature.
 
 Two drivers — budget-oblivious random search and a budget-aware

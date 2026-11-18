@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The agent-first surface of CADAQUES (ADR-0013).
 
 Typed tools over persistent campaigns, for agents and people alike::

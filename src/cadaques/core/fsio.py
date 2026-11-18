@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Durable file writes shared by the record's small files.
 
 ``spec.json``, ``checkpoint.json`` and the snapshot are replaced, never

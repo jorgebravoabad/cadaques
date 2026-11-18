@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The campaign runtime: the loop with an accountant inside."""
 
 from .campaign import Campaign, CampaignResult, DriverStopped, Outcome

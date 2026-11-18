@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """DatasetOracle: retrospective campaigns with a declared miss policy."""
 
 from __future__ import annotations

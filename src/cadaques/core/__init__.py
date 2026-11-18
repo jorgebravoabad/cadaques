@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Core data objects: costs, budgets, ledger, and the typed records.
 
 For 0.1 compatibility this package also re-exports the protocol and

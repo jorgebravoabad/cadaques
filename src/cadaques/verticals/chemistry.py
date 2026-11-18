@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The chemistry vertical: a reaction table, understood.
 
 The kernel is domain-neutral by constitution — it sees columns, not

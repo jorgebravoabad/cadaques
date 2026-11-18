@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """One audited statistics module for every comparison the programme makes.
 
 Reproducible evaluation ends at the confidence interval: every

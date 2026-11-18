@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Domain verticals: thin semantic layers over the neutral kernel.
 
 A vertical declares a domain's vocabulary and compiles it to kernel

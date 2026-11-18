@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The :class:`DatasetOracle`: retrospective campaigns over hidden data.
 
 The door to every spreadsheet-based study: a table of previously

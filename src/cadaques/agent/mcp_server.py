@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Serve the CADAQUES tools over the Model Context Protocol (extra ``[mcp]``).
 
 A thin adapter: every MCP tool is a :class:`~cadaques.agent.tools.Tool`

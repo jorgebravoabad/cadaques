@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Typed request/response records of the discovery loop.
 
 :class:`Query` and :class:`Result` are the evaluation-specialized

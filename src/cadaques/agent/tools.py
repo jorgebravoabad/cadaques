@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The agent-facing tool surface of CADAQUES (ADR-0013, ADR-0014).
 
 Every operation an agent may perform on a campaign is a :class:`Tool`

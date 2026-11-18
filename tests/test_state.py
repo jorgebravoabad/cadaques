@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """Derived state and the live/derived equivalence (ADR-0004)."""
 
 from __future__ import annotations

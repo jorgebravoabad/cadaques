@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The Campaign runner: the discovery loop with an accountant inside.
 
 The loop is deliberately small. Its one structural commitment is the

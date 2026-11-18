@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2026 Jorge Bravo-Abad
 """The north-star tests: replay equivalence and kill-and-resume (ADR-0004/0012)."""
 
 from __future__ import annotations
