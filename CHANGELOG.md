@@ -5,7 +5,7 @@ the pre-1.0 stability policy. The claim of record is the latest tag.
 Concept DOI, resolving to the latest version:
 [10.5281/zenodo.21293588](https://doi.org/10.5281/zenodo.21293588).
 
-## [0.4.2] — 2026-11
+## [0.4.2] — 2026-11 — DOI: [10.5281/zenodo.24340971](https://doi.org/10.5281/zenodo.24340971)
 
 A packaging and documentation patch release (ADR-0010: no new public API, no
 behaviour change in the kernel), prompted by reviewer feedback on 0.4.1.
